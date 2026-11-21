@@ -1,0 +1,17 @@
+# Variante ohne fertiges Image: baut discbox direkt aus diesem Ordner.
+#   docker compose -f docker-compose.build.yml up -d --build
+
+services:
+  discbox:
+    build: .
+    image: discbox:local
+    container_name: discbox
+    restart: unless-stopped
+    ports:
+      - "8095:8080"
+    volumes:
+      - /volume1/Musik:/music:ro
+      - ./data:/data
+    environment:
+      TZ: Europe/Berlin
+      ONLINE_COVERS: "true"

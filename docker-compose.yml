@@ -1,0 +1,25 @@
+# discbox auf einem Ugreen-NAS (UGOS Pro → Docker → Projekt → Erstellen)
+# oder überall sonst mit:  docker compose up -d
+#
+# Nur zwei Dinge anpassen:
+#   1. Den Pfad zu deinem Musikordner (linke Seite von „:/music:ro“)
+#   2. Den Pfad für die discbox-Daten (linke Seite von „:/data“)
+
+services:
+  discbox:
+    image: ghcr.io/jackdefjam/discbox:latest
+    container_name: discbox
+    restart: unless-stopped
+    ports:
+      - "8095:8080"            # Aufruf im Browser: http://<NAS-IP>:8095
+    volumes:
+      - /volume1/Musik:/music:ro             # ← dein Musikordner (nur lesend)
+      - /volume1/docker/discbox/data:/data   # ← Cache, Cover, Einstellungen
+    environment:
+      TZ: Europe/Berlin
+      ONLINE_COVERS: "true"                  # fehlende Front-/Backcover bei MusicBrainz suchen
+      SCAN_INTERVAL_MINUTES: "360"           # alle 6 Stunden auf neue Alben prüfen (0 = nie)
+      # DISCBOX_PASSWORD: "bitte-ändern"     # Passwortschutz (Benutzer: discbox)
+      # MUSICBRAINZ_CONTACT: "deine@mail.de" # Kontakt für MusicBrainz (empfohlen)
+    # Falls der Container keine Leserechte auf die Musik hat, mit der UID/GID deines NAS-Benutzers starten:
+    # user: "1000:10"

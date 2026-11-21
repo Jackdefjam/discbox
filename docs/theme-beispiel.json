@@ -1,0 +1,13 @@
+{
+  "id": "plattenladen",
+  "name": "Plattenladen",
+  "background": { "top": "#3a2f2a", "bottom": "#0e0b0a" },
+  "fog": { "color": "#0e0b0a", "near": 6.5, "far": 15 },
+  "floor": { "color": "#1a1412", "reflectivity": 0.3, "grid": null },
+  "lights": { "ambient": 0.5, "sky": "#ffe2c4", "ground": "#1b120d", "key": 2.5, "keyColor": "#ffd9b0", "rim": 1.4, "rimColor": "#ff9966", "env": 0.8 },
+  "accent": "#ffb36b",
+  "tint": 0.3,
+  "particles": { "kind": "dust", "count": 120, "color": "#ffd2a6", "size": 0.02, "opacity": 0.35 },
+  "ui": { "text": "#fff5ec", "muted": "#c8b2a0", "panel": "rgba(28, 20, 16, 0.74)", "panelBorder": "rgba(255, 179, 107, 0.2)" },
+  "caseEdges": "#ffe3c9"
+}

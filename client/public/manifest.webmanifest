@@ -1,0 +1,10 @@
+{
+  "name": "discbox",
+  "short_name": "discbox",
+  "description": "Deine CD-Sammlung in 3D",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

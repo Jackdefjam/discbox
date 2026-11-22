@@ -52,7 +52,7 @@ services:
     container_name: discbox
     restart: unless-stopped
     ports:
-      - "619:8080"
+      - "6619:8080"
     volumes:
       - /volume1/Musik:/music:ro             # ← dein Musikordner
       - /volume1/docker/discbox/data:/data   # ← Daten-Ordner aus Schritt 2
@@ -61,7 +61,7 @@ services:
       ONLINE_COVERS: "true"
 ```
 
-4. Projekt bereitstellen. Nach dem Start im Browser öffnen: **`http://<IP-deines-NAS>:619`**
+4. Projekt bereitstellen. Nach dem Start im Browser öffnen: **`http://<IP-deines-NAS>:6619`**
 
 Beim ersten Start liest discbox die Bibliothek ein. Der Fortschritt erscheint direkt in der Oberfläche. Danach sucht discbox im Hintergrund nach fehlenden Covern.
 
@@ -197,7 +197,7 @@ discbox ist für das Heimnetz gedacht. Für den Zugriff von außen empfiehlt sic
 
 - **„Keine Alben gefunden“:** Stimmt der Pfad links von `:/music:ro`? Hat der Container Leserechte? Falls nicht, in der Compose-Datei `user: "UID:GID"` deines NAS-Benutzers setzen.
 - **Ruckelt auf dem Fernseher oder einem alten Laptop:** Einstellungen → Qualität „Niedrig“ (ohne Spiegelungen und Partikel).
-- **Cover fehlen oder stehen auf dem Kopf (sehr alte Browser):** `?compat` an die Adresse anhängen, z. B. `http://nas:619/?compat`.
+- **Cover fehlen oder stehen auf dem Kopf (sehr alte Browser):** `?compat` an die Adresse anhängen, z. B. `http://nas:6619/?compat`.
 - **Falsches Online-Cover:** Detailansicht → Cover → Link zur richtigen MusicBrainz-Veröffentlichung einfügen. Oder einfach `cover.jpg`/`back.jpg` in den Ordner legen und neu einlesen.
 - **Neue Alben erscheinen nicht:** Oben auf ⟳ klicken (liest nur Änderungen) oder in den Einstellungen „Komplett neu einlesen“.
 

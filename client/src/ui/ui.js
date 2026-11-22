@@ -52,6 +52,11 @@ export class UI {
         <div class="brand">${ICONS.disc}<span>disc<b>box</b></span></div>
         <label class="search">${ICONS.search}<input type="search" placeholder="Suchen …  ( / )" autocomplete="off" spellcheck="false" aria-label="Suchen"><button class="clear" title="Suche leeren" aria-label="Suche leeren">${ICONS.close}</button></label>
         <div class="tools">
+          <div class="seg views" role="tablist" aria-label="Ansicht">
+            <button class="seg-btn txt" data-view="all" title="Alle Alben (V)">Alle</button>
+            <button class="seg-btn txt" data-view="favorites" title="Favoriten (V)">${ICONS.star}<span class="fav-count"></span></button>
+          </div>
+          <button class="icon complete-only" title="Nur Alben mit Front- und Rückseite" aria-label="Nur Alben mit Front- und Rückseite">${ICONS.pair}</button>
           <select class="sort" title="Sortierung" aria-label="Sortierung">${sortOptions}</select>
           <select class="genre" title="Genre" aria-label="Genre"><option value="">Alle Genres</option></select>
           <div class="seg layouts">${layoutButtons}</div>
@@ -70,6 +75,7 @@ export class UI {
         <div class="cap-actions">
           <button class="btn primary cap-play">${ICONS.play}<span>Abspielen</span></button>
           <button class="btn ghost cap-open">${ICONS.open}<span>Ansehen</span></button>
+          <button class="btn ghost cap-fav" title="Favorit (S)">${ICONS.starOutline}<span>Favorit</span></button>
         </div>
         <div class="cap-count"></div>
       </section>
@@ -85,6 +91,7 @@ export class UI {
           <div class="p-actions">
             <button class="btn primary p-play">${ICONS.play}<span>Abspielen</span></button>
             <button class="btn ghost p-shuffle" title="Zufällige Reihenfolge">${ICONS.shuffle}<span>Zufall</span></button>
+            <button class="btn ghost p-fav" title="Favorit (S)">${ICONS.starOutline}<span>Favorit</span></button>
             <button class="btn ghost p-lid" title="Hülle öffnen (O)">${ICONS.open}<span>Öffnen</span></button>
             <button class="btn ghost p-flip" title="Umdrehen (F)">${ICONS.flip}<span>Umdrehen</span></button>
             <button class="btn ghost p-booklet" title="Booklet & Scans (B)">${ICONS.booklet}<span>Booklet</span></button>
@@ -155,6 +162,13 @@ export class UI {
         <button class="btn primary empty-scan">${ICONS.refresh}<span>Erneut einlesen</span></button>
       </div></div>
 
+      <div class="filter-empty chrome hidden"><div class="empty-card">
+        <div class="fe-icon">${ICONS.star}</div>
+        <h2 class="fe-title"></h2>
+        <p class="fe-msg"></p>
+        <div class="fe-actions"></div>
+      </div></div>
+
       <div class="modal settings hidden" role="dialog" aria-label="Einstellungen"><div class="modal-card">
         <header><h2>Einstellungen</h2><button class="icon modal-close" aria-label="Schließen">${ICONS.close}</button></header>
         <div class="modal-body settings-body"></div>
@@ -183,6 +197,15 @@ export class UI {
       genre: $(r, '.genre'),
       layouts: [...r.querySelectorAll('[data-layout]')],
       scanBtn: $(r, '.scan'),
+      views: [...r.querySelectorAll('[data-view]')],
+      favCount: $(r, '.fav-count'),
+      completeOnly: $(r, '.complete-only'),
+      capFav: $(r, '.cap-fav'),
+      pFav: $(r, '.p-fav'),
+      filterEmpty: $(r, '.filter-empty'),
+      feTitle: $(r, '.fe-title'),
+      feMsg: $(r, '.fe-msg'),
+      feActions: $(r, '.fe-actions'),
       scanBadge: $(r, '.scan .badge'),
       caption: $(r, '.caption'),
       capArtist: $(r, '.cap-artist'),
@@ -258,6 +281,14 @@ export class UI {
       store.setQuery('');
     });
     el.sort.addEventListener('change', () => store.setSort(el.sort.value));
+    for (const b of el.views) b.addEventListener('click', () => store.setCollection(b.dataset.view));
+    el.completeOnly.addEventListener('click', () => store.setCompleteOnly(!store.settings.completeOnly));
+    el.capFav.addEventListener('click', () => actions.toggleFavorite());
+    el.pFav.addEventListener('click', () => actions.toggleFavorite());
+    el.feActions.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-act]');
+      if (b) actions[b.dataset.act]?.();
+    });
     el.genre.addEventListener('change', () => store.setGenre(el.genre.value));
     for (const b of el.layouts) b.addEventListener('click', () => actions.setLayout(b.dataset.layout));
     $(this.root, '.random').addEventListener('click', () => actions.randomAlbum());
@@ -328,7 +359,9 @@ export class UI {
     store.on('filters', () => {
       el.search.value = store.query;
       el.genre.value = store.genre;
+      this.renderFilters();
     });
+    store.on('view', () => this.renderFilters());
   }
 
   // ---------- Allgemein ----------
@@ -376,6 +409,51 @@ export class UI {
     return { side: 'right', frac: Math.min(0.6, (r.width + 24) / window.innerWidth), top: top * 0.5 };
   }
 
+  /** Ansicht (Alle/Favoriten), Cover-Filter, Zähler und Hinweis bei leerer Ansicht. */
+  renderFilters() {
+    const { el, store } = this;
+    for (const b of el.views) b.classList.toggle('active', b.dataset.view === store.collection);
+    const favs = store.favoriteCount;
+    el.favCount.textContent = favs ? String(favs) : '';
+    el.completeOnly.classList.toggle('active', !!store.settings.completeOnly);
+    el.completeOnly.title = store.settings.completeOnly
+      ? 'Filter aktiv: nur Alben mit Front- und Rückseite (klicken zum Aufheben)'
+      : 'Nur Alben mit Front- und Rückseite';
+    this.renderFavorite(store.current);
+
+    const empty = store.all.length > 0 && store.view.length === 0;
+    el.filterEmpty.classList.toggle('hidden', !empty);
+    if (!empty) return;
+    const complete = store.completeAlbums.filter((a) => !a.favorite).length;
+    if (store.collection === 'favorites' && !favs) {
+      el.feTitle.textContent = 'Noch keine Favoriten';
+      el.feMsg.innerHTML =
+        'Markiere Alben mit <b>★ Favorit</b> oder der Taste <kbd>S</kbd>. Du kannst auch alle Alben übernehmen, bei denen Front- <i>und</i> Rückseite vorhanden sind.';
+      el.feActions.innerHTML =
+        (complete ? `<button class="btn primary" data-act="favoriteAllComplete">${ICONS.star}<span>${complete} Alben mit Front + Rückseite übernehmen</span></button>` : '') +
+        `<button class="btn ghost" data-act="showAll"><span>Alle Alben zeigen</span></button>`;
+    } else {
+      el.feTitle.textContent = 'Nichts gefunden';
+      const reasons = [
+        store.collection === 'favorites' ? 'nur Favoriten' : null,
+        store.settings.completeOnly ? 'nur mit Front- und Rückseite' : null,
+        store.genre ? `Genre „${store.genre}“` : null,
+        store.query ? `Suche „${store.query}“` : null
+      ].filter(Boolean);
+      el.feMsg.textContent = `Kein Album passt zu: ${reasons.join(', ')}.`;
+      el.feActions.innerHTML = `<button class="btn primary" data-act="resetFilters"><span>Filter zurücksetzen</span></button>`;
+    }
+  }
+
+  renderFavorite(album) {
+    const on = !!album?.favorite;
+    for (const b of [this.el.capFav, this.el.pFav]) {
+      b.classList.toggle('is-fav', on);
+      b.innerHTML = `${on ? ICONS.star : ICONS.starOutline}<span>${on ? 'Favorit' : 'Favorit'}</span>`;
+      b.title = on ? 'Aus den Favoriten entfernen (S)' : 'Zu den Favoriten (S)';
+    }
+  }
+
   // ---------- Browse-Ansicht ----------
   renderCaption(album) {
     const { el } = this;
@@ -388,7 +466,8 @@ export class UI {
     el.capTitle.textContent = album.title;
     const meta = [album.year, album.genres?.[0], `${album.trackCount} Titel`, fmtLong(album.duration), album.format].filter(Boolean);
     el.capMeta.textContent = meta.join('  ·  ');
-    el.capCount.textContent = `${this.store.index + 1} / ${this.store.view.length}`;
+    el.capCount.textContent = `${this.store.index + 1} / ${this.store.view.length}${this.store.collection === 'favorites' ? ' Favoriten' : ''}`;
+    this.renderFavorite(album);
     el.caption.classList.remove('swap');
     void el.caption.offsetWidth;
     el.caption.classList.add('swap');
@@ -655,6 +734,15 @@ export class UI {
           ${opt(0, 'Aus', s.idleMinutes)}${opt(2, 'nach 2 Minuten', s.idleMinutes)}${opt(5, 'nach 5 Minuten', s.idleMinutes)}${opt(15, 'nach 15 Minuten', s.idleMinutes)}
         </select></label>
       </section>
+      <section><h3>Ansicht</h3>
+        <label class="row"><span>Beim Start zeigen</span><select data-key="startView">
+          ${opt('favorites', 'Favoriten', s.startView)}${opt('all', 'Alle Alben', s.startView)}
+        </select></label>
+        ${check('completeOnly', 'Nur Alben mit Front- und Rückseite', 'Alben ohne vollständige Cover werden ausgeblendet')}
+        <div class="row buttons">
+          <button class="btn small s-favcomplete">${ICONS.star}<span>Alle ${this.store.completeAlbums.filter((a) => !a.favorite).length} Alben mit Front + Rückseite zu Favoriten</span></button>
+        </div>
+      </section>
       <section><h3>CD-Hülle</h3>
         <label class="row"><span>Schrift auf dem Rücken</span><select data-key="spineDirection">
           ${opt('down', 'von oben nach unten', s.spineDirection)}${opt('up', 'von unten nach oben', s.spineDirection)}
@@ -686,6 +774,10 @@ export class UI {
       });
     }
     $(this.el.settingsBody, '.s-scan').addEventListener('click', () => this.actions.rescan(false));
+    $(this.el.settingsBody, '.s-favcomplete').addEventListener('click', async () => {
+      await this.actions.favoriteAllComplete();
+      this.renderSettings();
+    });
     $(this.el.settingsBody, '.s-fullscan').addEventListener('click', () => this.actions.rescan(true));
   }
 
@@ -700,6 +792,8 @@ export class UI {
           ${row(['Enter'], 'Album herausnehmen und ansehen')}
           ${row(['P'], 'Album abspielen')}
           ${row(['R'], 'Zufälliges Album')}
+          ${row(['S'], 'Favorit an/aus')}
+          ${row(['V'], 'Alle Alben / Favoriten')}
           ${row(['/'], 'Suchen')}
           ${row(['L'], 'Anordnung wechseln')}
           ${row(['T'], 'Theme wechseln')}

@@ -7,7 +7,7 @@
 // sie austauschen kann.
 
 import * as THREE from 'three';
-import { drawDiscAlpha, drawShadow } from './artgen.js';
+import { drawDiscAlpha, drawFavSticker, drawShadow } from './artgen.js';
 
 export const MM = 0.01; // 1 mm in Szeneneinheiten
 export const CASE = { W: 142, H: 125, D: 10.4, LID: 2.6, BOOK: 120, BACK_W: 138, BACK_H: 118, SPINE: 6.5 };
@@ -76,7 +76,10 @@ export class CaseFactory {
     this.discAlpha = new THREE.CanvasTexture(drawDiscAlpha());
     this.shadowTex = new THREE.CanvasTexture(drawShadow());
     this.shadowMat = new THREE.MeshBasicMaterial({ map: this.shadowTex, transparent: true, depthWrite: false, opacity: 0.7 });
-    this.geo = { shadow: new THREE.PlaneGeometry(1, 1) };
+    this.geo = { shadow: new THREE.PlaneGeometry(1, 1), sticker: new THREE.CircleGeometry(6.5, 40) };
+    const stickerTex = new THREE.CanvasTexture(drawFavSticker());
+    stickerTex.colorSpace = THREE.SRGBColorSpace;
+    this.stickerMat = withReflectionFade(new THREE.MeshStandardMaterial({ map: stickerTex, roughness: 0.35, metalness: 0.15 }));
   }
 
   /** Geometrien einer Variante (einmal erzeugt, von allen Hüllen geteilt). */
@@ -245,6 +248,11 @@ export class JewelCase {
     this.inlay.position.set(3, 0, LID / 2 - Math.min(0.55, LID / 2.5));
     this.inlay.visible = false;
     lid.add(this.lidShell, this.lidEdges, this.booklet, this.inlay);
+    // Favoriten-Aufkleber außen auf dem Deckel (oben rechts)
+    this.sticker = new THREE.Mesh(f.geo.sticker, f.stickerMat);
+    this.sticker.position.set(W / 2 - 12, H / 2 - 11, LID / 2 + 0.08);
+    this.sticker.visible = false;
+    lid.add(this.sticker);
     if (!slim) {
       for (const y of [H / 2 - 6, -H / 2 + 6]) {
         const k = new THREE.Mesh(g.knuckle, f.knuckleMat);
@@ -291,6 +299,10 @@ export class JewelCase {
     const front = new THREE.Mesh(g.panel, [edge, edge, edge, edge, this.frontMat, this.inlayMat]);
     front.position.set(W / 2, 0, -LID / 2);
     this.lidPivot.add(front);
+    this.sticker = new THREE.Mesh(f.geo.sticker, f.stickerMat);
+    this.sticker.position.set(W - 10, v.H / 2 - 10, 0.08);
+    this.sticker.visible = false;
+    this.lidPivot.add(this.sticker);
     model.add(this.lidPivot);
     this.inlay = { visible: false };
   }
@@ -303,6 +315,10 @@ export class JewelCase {
     const open = t > 0.004;
     this.interior.visible = open;
     this.inlay.visible = open;
+  }
+
+  setFavorite(on) {
+    this.sticker.visible = !!on;
   }
 
   /** Meshes der CDs (für das Drehen beim Abspielen). */

@@ -17,6 +17,8 @@ export const DEFAULT_SETTINGS = {
   spineDirection: 'down',
   tray: 'black',
   caseAuto: true,
+  startView: 'favorites',
+  completeOnly: false,
   defaultCase: 'jewel',
   volume: 0.85,
   lastAlbumId: null
@@ -59,6 +61,8 @@ export const SORTS = {
   }
 };
 
+export const isComplete = (a) => !!(a.art?.front && a.art?.back);
+
 export const letterOf = (s) => {
   const c = String(s ?? '').charAt(0).toLocaleUpperCase('de');
   if (!c) return '#';
@@ -85,6 +89,8 @@ export class Store extends Emitter {
     this.genre = '';
     this.version = -1;
     this.settings = loadSettings();
+    // Ansicht: 'all' oder 'favorites' (Start laut Einstellung)
+    this.collection = this.settings.startView === 'all' ? 'all' : 'favorites';
     this.details = new Map();
     this.status = null;
   }
@@ -131,9 +137,45 @@ export class Store extends Emitter {
     this.#rebuild(this.current?.id);
   }
 
+  setCollection(collection) {
+    if (this.collection === collection) return;
+    this.collection = collection;
+    this.#rebuild(this.current?.id);
+    this.emit('filters');
+  }
+
+  setCompleteOnly(on) {
+    this.updateSettings({ completeOnly: on });
+    this.#rebuild(this.current?.id);
+    this.emit('filters');
+  }
+
+  get favoriteCount() {
+    return this.all.filter((a) => a.favorite).length;
+  }
+
+  /** Alben mit Front- und Rückseite (eigene, eingebettete oder online gefundene Bilder). */
+  get completeAlbums() {
+    return this.all.filter(isComplete);
+  }
+
+  /** Favoriten lokal setzen (Server wird vom Aufrufer informiert). */
+  markFavorite(ids, favorite) {
+    const set = new Set(ids);
+    for (const a of this.all) if (set.has(a.id)) a.favorite = favorite ? Date.now() : null;
+    const keep = this.current?.id;
+    const keepIndex = this.index;
+    this.#rebuild(keep);
+    // Aus den Favoriten entfernt: an derselben Stelle weitermachen statt zum Anfang zu springen
+    if (this.current?.id !== keep && this.view.length) this.select(Math.min(keepIndex, this.view.length - 1), { force: true });
+    this.emit('filters');
+  }
+
   #rebuild(keepId) {
     const terms = this.query.toLocaleLowerCase('de').split(/\s+/).filter(Boolean);
     let list = this.all;
+    if (this.collection === 'favorites') list = list.filter((a) => a.favorite);
+    if (this.settings.completeOnly) list = list.filter(isComplete);
     if (terms.length) list = list.filter((a) => terms.every((t) => a._search.includes(t)));
     if (this.genre) list = list.filter((a) => a.genres?.includes(this.genre));
     const sort = SORTS[this.settings.sort] ?? SORTS.artist;
@@ -179,10 +221,13 @@ export class Store extends Emitter {
 
   selectId(id, opts) {
     let i = this.view.findIndex((a) => a.id === id);
-    if (i < 0 && (this.query || this.genre)) {
+    if (i < 0) {
       // Album ist ausgefiltert: Filter zurücksetzen
       this.query = '';
       this.genre = '';
+      this.collection = 'all';
+      const album = this.all.find((a) => a.id === id);
+      if (album && !isComplete(album)) this.settings.completeOnly = false;
       this.#rebuild(id);
       this.emit('filters');
       i = this.view.findIndex((a) => a.id === id);

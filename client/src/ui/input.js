@@ -122,6 +122,14 @@ export class Input {
       case 'C':
         if (inspect) actions.cycleCase();
         break;
+      case 's':
+      case 'S':
+        actions.toggleFavorite();
+        break;
+      case 'v':
+      case 'V':
+        store.setCollection(store.collection === 'favorites' ? 'all' : 'favorites');
+        break;
       case 'l':
       case 'L':
         actions.cycleLayout();
@@ -383,6 +391,10 @@ export class Input {
       active = true;
       if (player.current) player.toggle();
       else actions.playAlbum();
+    }
+    if (edge(11)) {
+      active = true;
+      actions.toggleFavorite();
     }
     if (edge(10)) {
       active = true;

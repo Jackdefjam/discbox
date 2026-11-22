@@ -490,6 +490,39 @@ export function drawShadow() {
   return c;
 }
 
+/** Runder goldener Aufkleber mit Stern für Favoriten. */
+export function drawFavSticker() {
+  const size = 256;
+  const c = canvas(size, size);
+  const ctx = c.getContext('2d');
+  const r = size / 2;
+  const g = ctx.createRadialGradient(r * 0.7, r * 0.6, 10, r, r, r);
+  g.addColorStop(0, '#fff3b0');
+  g.addColorStop(0.45, '#fbbf24');
+  g.addColorStop(1, '#b45309');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(r, r, r - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(r, r, r - 16, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(120,53,15,0.6)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 ? r * 0.28 : r * 0.62;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    ctx.lineTo(r + Math.cos(a) * rad, r + Math.sin(a) * rad);
+  }
+  ctx.closePath();
+  ctx.fill();
+  return c;
+}
+
 export function drawSprite() {
   const c = canvas(64, 64);
   const ctx = c.getContext('2d');

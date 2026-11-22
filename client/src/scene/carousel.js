@@ -580,6 +580,7 @@ export class Carousel {
         Object.assign(s, keep);
       }
       const d = i - this.pos;
+      s.case.setFavorite(s.album.favorite);
       info.base = (this.centers[i] ?? 0) - posCenter;
       this.layout.pose(d, pose, info);
       if (this.ib > 0.001 && i !== inspectIndex) {

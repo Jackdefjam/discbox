@@ -158,7 +158,43 @@ async function boot() {
       ui.toast(`Theme: ${next.name}`, { ms: 1400 });
     },
     changeSetting(key, value) {
+      if (key === 'completeOnly') return store.setCompleteOnly(value);
       store.updateSettings({ [key]: value });
+    },
+    async toggleFavorite() {
+      const album = store.current;
+      if (!album) return;
+      const on = !album.favorite;
+      store.markFavorite([album.id], on);
+      try {
+        await api.setFavorite(album.id, on);
+        ui.toast(on ? `★ „${album.title}“ ist jetzt Favorit` : `„${album.title}“ aus den Favoriten entfernt`, { ms: 1600 });
+      } catch (err) {
+        store.markFavorite([album.id], !on);
+        ui.toast(`Favorit nicht gespeichert: ${err.message}`, { kind: 'error' });
+      }
+    },
+    /** Alle Alben mit Front- und Rückseite zu Favoriten machen. */
+    async favoriteAllComplete() {
+      const ids = store.completeAlbums.filter((a) => !a.favorite).map((a) => a.id);
+      if (!ids.length) return ui.toast('Alle Alben mit Front- und Rückseite sind schon Favoriten.');
+      store.markFavorite(ids, true);
+      try {
+        await api.setFavorites(ids, true);
+        ui.toast(`${ids.length} Alben zu den Favoriten hinzugefügt`);
+      } catch (err) {
+        store.markFavorite(ids, false);
+        ui.toast(`Favoriten nicht gespeichert: ${err.message}`, { kind: 'error' });
+      }
+    },
+    showAll() {
+      store.setCollection('all');
+    },
+    resetFilters() {
+      store.query = '';
+      store.genre = '';
+      store.setCompleteOnly(false);
+      store.setCollection('all');
     },
     /** Hülle für das aktuelle Album festlegen ('auto' = automatisch). */
     async setCase(variant) {

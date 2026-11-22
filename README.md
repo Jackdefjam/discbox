@@ -16,6 +16,7 @@
 - **Drei Anordnungen:** Coverflow, Regal (Rücken an Rücken wie im CD-Regal) und Rad.
 - **Fünf Themes** (Studio, Neon Arcade, Wohnzimmer, Mitternacht, Galerie hell) plus eigene Themes als JSON-Datei. Der Hintergrund färbt sich passend zum gewählten Album.
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
+- **Favoriten** mit eigener Ansicht (Start-Ansicht), goldenem Aufkleber auf der Hülle und dem Filter **„Nur komplette Cover“**: zeigt nur Alben, bei denen Front- *und* Rückseite vorhanden sind. Alle diese Alben lassen sich mit einem Klick zu Favoriten machen.
 - **Booklet-Ansicht** für alle Scans im Albumordner (auch im Unterordner `Scans/`, `Artwork/` …).
 - **Abspielen im Browser:** Warteschlange, Zufall, Wiederholen, Spulen, Medientasten. Der nächste Titel wird vorgeladen. MP3, FLAC, AAC, Opus, Vorbis und WAV laufen direkt; **WMA, ALAC, APE, WavPack, DSD & Co. wandelt der Server mit ffmpeg um** (Spulen funktioniert auch dann).
 - **Bedienung per Maus, Touch, Tastatur, TV-Fernbedienung und Gamepad** (Xbox/PlayStation-Controller, wie in LaunchBox Big Box).
@@ -82,6 +83,15 @@ docker compose -f docker-compose.build.yml up -d --build
 
 ---
 
+## Favoriten und komplette Cover
+
+- **Favorit setzen:** ★ unter dem Albumtitel, im Album-Panel, Taste **S** oder rechter Stick-Klick am Controller.
+- **Ansicht wechseln:** oben „Alle“ / „★ Favoriten“ oder Taste **V**. Beim Start zeigt discbox die Favoriten. In den Einstellungen unter *Ansicht → Beim Start zeigen* lässt sich das ändern.
+- **Nur komplette Cover:** Das Symbol mit den zwei Karten neben der Ansicht blendet alle Alben aus, denen das Frontcover oder die Rückseite fehlt. Der Filter funktioniert in beiden Ansichten und bleibt gespeichert.
+- **Alle kompletten Alben übernehmen:** In der leeren Favoriten-Ansicht oder in den Einstellungen gibt es einen Knopf, der alle Alben mit Front- und Rückseite auf einmal zu Favoriten macht.
+
+Favoriten werden auf dem Server gespeichert (`overrides.json` im Daten-Ordner). Sie gelten auf allen Geräten und überstehen jeden Scan.
+
 ## Hüllenarten
 
 ![Hüllenarten](docs/huellen.jpg)
@@ -138,7 +148,7 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, Enter ansehen, P abspielen, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
+| **Tastatur** | ← → blättern, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
 | **Gamepad** | Steuerkreuz/Stick blättern, A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.

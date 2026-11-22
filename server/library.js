@@ -263,19 +263,38 @@ export class Library extends EventEmitter {
     return true;
   }
 
-  /** Hüllenart für ein Album festlegen ('auto' entfernt die Festlegung). */
-  async setCaseVariant(albumId, variant) {
-    if (!this.byId.has(albumId)) return false;
-    const o = { ...(this.overrides[albumId] ?? {}) };
-    if (!variant || variant === 'auto') delete o.case;
-    else o.case = variant;
-    if (Object.keys(o).length) this.overrides[albumId] = o;
-    else delete this.overrides[albumId];
+  /** Eigene Angaben je Album ändern (Werte null/undefined entfernen den Eintrag). */
+  async #patchOverrides(ids, patch) {
+    let changed = 0;
+    for (const id of ids) {
+      if (!this.byId.has(id)) continue;
+      const o = { ...(this.overrides[id] ?? {}) };
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null) delete o[k];
+        else o[k] = v;
+      }
+      if (Object.keys(o).length) this.overrides[id] = o;
+      else delete this.overrides[id];
+      changed++;
+    }
+    if (!changed) return 0;
     await writeJsonAtomic(this.overridesFile, this.overrides);
     this.version++;
-    this.#saveSoon();
     this.emit('change');
-    return true;
+    return changed;
+  }
+
+  /** Hüllenart für ein Album festlegen ('auto' entfernt die Festlegung). */
+  async setCaseVariant(albumId, variant) {
+    return (await this.#patchOverrides([albumId], { case: !variant || variant === 'auto' ? null : variant })) > 0;
+  }
+
+  /** Favoriten setzen oder entfernen (einzeln oder viele auf einmal). Liefert die Anzahl. */
+  async setFavorite(albumIds, favorite) {
+    const known = albumIds.filter((id) => this.byId.has(id));
+    if (!known.length) return -1;
+    const ids = known.filter((id) => !!this.overrides[id]?.fav !== favorite);
+    return ids.length ? this.#patchOverrides(ids, { fav: favorite ? Date.now() : null }) : 0;
   }
 
   // ---------- Ausgabe für die API ----------
@@ -296,6 +315,7 @@ export class Library extends EventEmitter {
       art: Object.fromEntries(KINDS.map((k) => [k, a.art?.[k]?.v ?? null])),
       gallery: a.gallery?.length ?? 0,
       caseVariant: this.overrides[a.id]?.case ?? null,
+      favorite: this.overrides[a.id]?.fav ?? null,
       packaging: a.packaging ?? null
     };
   }

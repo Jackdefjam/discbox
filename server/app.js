@@ -56,7 +56,7 @@ export function createApp({ config, log, library, transcoder }) {
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.use(basicAuth(config));
-  app.use(express.json({ limit: '64kb' }));
+  app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/status', (_req, res) => {
     res.json({
@@ -140,6 +140,22 @@ export function createApp({ config, log, library, transcoder }) {
     if (!CASE_VARIANTS.includes(variant)) return res.status(400).json({ error: `Unbekannte Hülle: ${variant}` });
     if (!(await library.setCaseVariant(req.params.id, variant))) return res.status(404).json({ error: 'Album nicht gefunden' });
     res.json({ id: req.params.id, caseVariant: variant === 'auto' ? null : variant });
+  });
+
+  // Favoriten: einzeln (PUT /api/albums/:id/favorite) oder viele (POST /api/favorites)
+  app.put('/api/albums/:id/favorite', async (req, res) => {
+    const favorite = req.body?.favorite !== false;
+    const n = await library.setFavorite([req.params.id], favorite);
+    if (n < 0) return res.status(404).json({ error: 'Album nicht gefunden' });
+    res.json({ id: req.params.id, favorite });
+  });
+
+  app.post('/api/favorites', async (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).slice(0, 20000) : null;
+    if (!ids) return res.status(400).json({ error: 'ids fehlt' });
+    const favorite = req.body?.favorite !== false;
+    const changed = Math.max(0, await library.setFavorite(ids, favorite));
+    res.json({ changed, favorite });
   });
 
   app.get('/api/themes', async (_req, res) => {

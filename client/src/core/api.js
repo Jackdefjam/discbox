@@ -23,6 +23,13 @@ export const api = {
   album: (id) => request(`/api/albums/${encodeURIComponent(id)}`),
   themes: () => request('/api/themes').catch(() => []),
   scan: (full = false) => post('/api/scan', { full }),
+  setFavorite: (id, favorite) =>
+    request(`/api/albums/${encodeURIComponent(id)}/favorite`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ favorite })
+    }),
+  setFavorites: (ids, favorite) => post('/api/favorites', { ids, favorite }),
   setCase: (id, variant) =>
     request(`/api/albums/${encodeURIComponent(id)}/case`, {
       method: 'PUT',

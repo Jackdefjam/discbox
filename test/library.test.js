@@ -80,6 +80,22 @@ test('Scan der Testbibliothek und API', { skip }, async () => {
     assert.equal((await put('auto')).status, 200);
     s = (await (await fetch(`${base}/api/albums`)).json()).albums.find((a) => a.id === nacht.id);
     assert.equal(s.caseVariant, null);
+
+    // Favoriten einzeln und gesammelt
+    const fav = (id, favorite) =>
+      fetch(`${base}/api/albums/${id}/favorite`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ favorite }) });
+    assert.equal((await fav(nacht.id, true)).status, 200);
+    assert.equal((await fav('gibtsnicht', true)).status, 404);
+    const complete = library.albums.filter((a) => a.art.front && a.art.back).map((a) => a.id);
+    const bulk = await (
+      await fetch(`${base}/api/favorites`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: complete, favorite: true }) })
+    ).json();
+    assert.equal(bulk.changed, complete.length - (complete.includes(nacht.id) ? 1 : 0));
+    const favs = (await (await fetch(`${base}/api/albums`)).json()).albums.filter((a) => a.favorite);
+    assert.equal(favs.length, new Set([...complete, nacht.id]).size);
+    assert.equal((await fav(nacht.id, false)).status, 200);
+    s = (await (await fetch(`${base}/api/albums`)).json()).albums.find((a) => a.id === nacht.id);
+    assert.equal(s.favorite, null);
   } finally {
     server.close();
     fs.rmSync(dataDir, { recursive: true, force: true });

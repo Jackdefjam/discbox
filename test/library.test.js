@@ -68,6 +68,18 @@ test('Scan der Testbibliothek und API', { skip }, async () => {
     assert.equal((await range.arrayBuffer()).byteLength, 100);
     const missing = await fetch(`${base}/api/tracks/doesnotexist/stream`);
     assert.equal(missing.status, 404);
+
+    // Hüllenart festlegen und wieder auf automatisch stellen
+    const put = (variant) =>
+      fetch(`${base}/api/albums/${nacht.id}/case`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variant }) });
+    assert.equal((await put('digipak')).status, 200);
+    let s = (await (await fetch(`${base}/api/albums`)).json()).albums.find((a) => a.id === nacht.id);
+    assert.equal(s.caseVariant, 'digipak');
+    assert.ok(fs.existsSync(path.join(dataDir, 'overrides.json')));
+    assert.equal((await put('quatsch')).status, 400);
+    assert.equal((await put('auto')).status, 200);
+    s = (await (await fetch(`${base}/api/albums`)).json()).albums.find((a) => a.id === nacht.id);
+    assert.equal(s.caseVariant, null);
   } finally {
     server.close();
     fs.rmSync(dataDir, { recursive: true, force: true });

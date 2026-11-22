@@ -32,18 +32,19 @@ export function rankReleases(releases, album) {
       }
       if (r.status === 'Official') s += 5;
       if (album.year && String(r.date ?? '').startsWith(String(album.year))) s += 3;
-      return { id: r.id, rgid: r['release-group']?.id ?? null, s, title: r.title };
+      return { id: r.id, rgid: r['release-group']?.id ?? null, s, title: r.title, packaging: r.packaging };
     })
     .sort((a, b) => b.s - a.s);
 }
 
 export class OnlineCovers {
-  constructor({ dataDir, contact, log, fetchImpl = globalThis.fetch, enabled = true, mbDelay = 1100, onResult }) {
+  constructor({ dataDir, contact, log, fetchImpl = globalThis.fetch, enabled = true, packaging = true, mbDelay = 1100, onResult }) {
     this.dataDir = dataDir;
     this.file = path.join(dataDir, 'online.json');
     this.log = log;
     this.fetch = fetchImpl;
     this.enabled = enabled;
+    this.packaging = packaging; // Verpackung (Jewel, Digipak, Slim …) bei MusicBrainz nachschlagen
     this.mbDelay = mbDelay;
     this.onResult = onResult ?? (() => {});
     this.userAgent = `discbox/1.0 ( ${contact} )`;
@@ -59,6 +60,10 @@ export class OnlineCovers {
     this.state = await readJson(this.file, {});
   }
 
+  packagingOf(albumId) {
+    return this.state[albumId]?.packaging ?? null;
+  }
+
   /** ArtRefs, die online gefunden wurden. */
   artFor(albumId) {
     return this.state[albumId]?.art ?? {};
@@ -67,13 +72,23 @@ export class OnlineCovers {
   info(albumId) {
     const s = this.state[albumId];
     if (!s) return null;
-    return { status: s.status, mbid: s.mbid ?? null, checkedAt: s.checkedAt ?? null, error: s.error ?? null, manualMbid: s.manualMbid ?? null };
+    return {
+      status: s.status,
+      mbid: s.mbid ?? null,
+      checkedAt: s.checkedAt ?? null,
+      error: s.error ?? null,
+      manualMbid: s.manualMbid ?? null,
+      packaging: s.packaging ?? null
+    };
   }
 
   /** Entscheidet, ob für ein Album (erneut) gesucht werden soll. */
   shouldLookup(album, missingKinds) {
-    if (!this.enabled || !missingKinds.length) return false;
+    if (!this.enabled) return false;
     const s = this.state[album.id];
+    // Verpackung wurde noch nie nachgeschlagen → einmal suchen (auch wenn alle Bilder lokal vorhanden sind)
+    if (this.packaging && (!s || s.packaging === undefined) && (!s || s.status !== 'error')) return true;
+    if (!missingKinds.length) return false;
     if (!s) return true;
     if (s.status === 'found') return false;
     const wait = RETRY_AFTER[s.status] ?? DAY;
@@ -154,6 +169,12 @@ export class OnlineCovers {
     return rankReleases(data?.releases ?? [], album);
   }
 
+  /** Verpackungsart einer Veröffentlichung (z. B. „Jewel Case“, „Digipak“). */
+  async #packagingOf(id) {
+    const data = await this.#get(`${MB}/release/${id}?fmt=json`, { mb: true });
+    return data?.packaging ?? null;
+  }
+
   async #download(albumId, kind, image) {
     const url = image.thumbnails?.['1200'] ?? image.thumbnails?.large ?? image.image;
     const buf = await this.#get(url.replace(/^http:/, 'https:'), { json: false });
@@ -217,13 +238,22 @@ export class OnlineCovers {
     for (const k of Object.keys(art)) if (!art[k]) delete art[k];
 
     const required = need.filter((k) => k !== 'disc');
-    const status = required.every((k) => art[k]) && Object.keys(art).length ? 'found' : Object.keys(art).length ? 'partial' : 'notfound';
+    const got = Object.keys(art).length;
+    const status = !required.length || (required.every((k) => art[k]) && got) ? 'found' : got ? 'partial' : 'notfound';
+
+    // Verpackung der wahrscheinlichsten Veröffentlichung merken (nur bei sicherem Treffer)
+    let packaging = prev.packaging ?? null;
+    const best = (mbid && candidates.find((c) => c.id === mbid)) || candidates[0];
+    if (this.packaging && best && best.s >= 100) {
+      packaging = best.packaging !== undefined ? best.packaging : await this.#packagingOf(best.id).catch(() => null);
+    }
     this.state[album.id] = {
       status,
       mbid: mbid ?? candidates[0]?.id ?? null,
       manualMbid: manual,
       checkedAt: Date.now(),
       art,
+      packaging: packaging ?? null,
       error: null
     };
     this.save();

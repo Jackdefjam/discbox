@@ -5,12 +5,10 @@ import * as THREE from 'three';
 import { artUrl } from '../core/api.js';
 import { drawBack, drawDisc, drawFrontPlaceholder, drawInlay, drawSpine } from './artgen.js';
 import { albumHashColor } from './color.js';
-import { CASE, CASE_D, CASE_H, CASE_W, JewelCase } from './jewelcase.js';
+import { CASE, CASE_D, CASE_H, CASE_W, JewelCase, variantDepth } from './jewelcase.js';
 import { LAYOUTS } from './layouts.js';
 
-const BACK_ASPECT = CASE.BACK_W / CASE.BACK_H; // 1.17
-const SCAN_WITH_SPINES = 1.23; // 151 × 118 mm ≈ 1.28
-const SPINE_FRAC = CASE.SPINE / (CASE.BACK_W + 2 * CASE.SPINE);
+const SHELF_GAP = 0.008;
 
 const pose = { x: 0, y: 0, z: 0, yaw: 0 };
 const vA = new THREE.Vector3();
@@ -26,23 +24,44 @@ const yAxis = new THREE.Vector3(0, 1, 0);
 const ease = (t) => t * t * (3 - 2 * t);
 const damp = (cur, goal, rate, dt) => cur + (goal - cur) * (1 - Math.exp(-rate * dt));
 
-function cropTexture(entry, targetAspect) {
+/** Ausschnitt eines Bildes: horizontaler Bereich [x0, x1], danach mittig auf targetAspect zugeschnitten. */
+function regionTexture(entry, targetAspect, x0 = 0, x1 = 1) {
   const tex = entry.texture.clone();
-  const a = entry.width / entry.height;
+  const a = (entry.width * (x1 - x0)) / entry.height;
+  let rx = x1 - x0;
+  let ox = x0;
+  let ry = 1;
+  let oy = 0;
   if (a > targetAspect) {
-    tex.repeat.set(targetAspect / a, 1);
-    tex.offset.set((1 - targetAspect / a) / 2, 0);
+    const k = targetAspect / a;
+    ox += (rx * (1 - k)) / 2;
+    rx *= k;
   } else if (a < targetAspect) {
-    tex.repeat.set(1, a / targetAspect);
-    tex.offset.set(0, (1 - a / targetAspect) / 2);
+    ry = a / targetAspect;
+    oy = (1 - ry) / 2;
   }
+  tex.repeat.set(rx, ry);
+  tex.offset.set(ox, oy);
   return tex;
+}
+const cropTexture = (entry, aspect) => regionTexture(entry, aspect);
+
+/**
+ * Erkennt, ob ein Rückseiten-Scan die schmalen Rücken links und rechts enthält
+ * (Tray-Card 138 mm + 2 × Rücken bei 118 mm Höhe). Liefert den Anteil eines Rückens an der Breite oder 0.
+ */
+function spineFraction(entry) {
+  const a = entry.width / entry.height;
+  const spineMM = (a * CASE.BACK_H - CASE.BACK_W) / 2;
+  if (spineMM < 3 || spineMM > 26) return 0;
+  return spineMM / (CASE.BACK_W + 2 * spineMM);
 }
 
 class Slot {
   constructor(carousel) {
     this.c = carousel;
-    this.case = new JewelCase(carousel.factory);
+    this.cases = new Map(); // je Variante eine Hülle, wird bei Bedarf gewechselt
+    this.case = this.#caseFor('jewel');
     this.body = this.case.group;
     this.shadow = new THREE.Mesh(carousel.factory.geo.shadow, carousel.factory.shadowMat.clone());
     this.shadow.renderOrder = 1;
@@ -55,10 +74,34 @@ class Slot {
     this.reset();
   }
 
+  #caseFor(variant) {
+    let k = this.cases.get(variant);
+    if (!k) {
+      k = new JewelCase(this.c.factory, variant);
+      k.group.visible = false;
+      this.cases.set(variant, k);
+    }
+    return k;
+  }
+
+  /** Wechselt das 3D-Modell, wenn das Album eine andere Verpackung hat. */
+  #useVariant(variant) {
+    if (this.case.variant === variant) return;
+    const next = this.#caseFor(variant);
+    this.c.scene.remove(this.body);
+    this.case.group.visible = false;
+    this.case = next;
+    this.body = next.group;
+    this.c.scene.add(this.body);
+    this.case.setLid(0);
+  }
+
   reset() {
     this.e = 0;
     this.lid = 0;
     this.lidGoal = 0;
+    this.tray = 0;
+    this.trayGoal = 0;
     this.flip = 0;
     this.flipGoal = 0;
     this.yaw = 0;
@@ -90,6 +133,8 @@ class Slot {
 
   bind(album, index) {
     this.unbind();
+    this.#useVariant(this.c.variantFor(album));
+    this.variant = this.case.variant;
     this.album = album;
     this.index = index;
     this.token++;
@@ -110,11 +155,15 @@ class Slot {
     JewelCase.apply(k.inlayMat, null, '#ece7dc');
     JewelCase.apply(k.discMat, null, '#c9ced6');
     this.#applySpines();
-    if (!album.art?.front) {
-      const entry = this.c.textures.generated(`front:${album.id}`, () => drawFrontPlaceholder(album));
-      this.#set('front', k.frontMat, entry, entry.texture);
-      this.frontSize = 'gen';
-    }
+    if (!album.art?.front) this.#placeholderFront();
+  }
+
+  #placeholderFront() {
+    const a = this.album;
+    const entry = this.c.textures.generated(`front:${a.id}`, () => drawFrontPlaceholder(a));
+    const asp = this.case.frontAspect;
+    this.#set('front', this.case.frontMat, entry, asp === 1 ? entry.texture : cropTexture(entry, asp));
+    this.frontSize = 'gen';
   }
 
   unbind() {
@@ -129,10 +178,11 @@ class Slot {
   }
 
   #applySpines() {
-    if (this.spineFromScan) return;
+    if (this.spineFromScan || !this.case.hasSpines) return;
     const a = this.album;
     const dir = this.c.settings.spineDirection;
-    const entry = this.c.textures.generated(`spine:${a.id}:${this.color}:${dir}`, () => drawSpine(a, this.color, dir));
+    const w = this.case.spec.spineW;
+    const entry = this.c.textures.generated(`spine:${a.id}:${this.color}:${dir}:${w}`, () => drawSpine(a, this.color, dir, w));
     this.#set('spineH', this.case.spineHingeMat, entry, entry.texture);
     this.#set('spineO', this.case.spineOtherMat, entry, entry.texture);
   }
@@ -152,7 +202,7 @@ class Slot {
         if (token !== this.token) return;
         this.frontPending = null;
         if (this.frontSize && order[this.frontSize] > order[size]) return;
-        this.#set('front', this.case.frontMat, entry, cropTexture(entry, 1));
+        this.#set('front', this.case.frontMat, entry, cropTexture(entry, this.case.frontAspect));
         this.frontSize = size;
         this.frontEntry = entry;
         const color = this.c.textures.colorOf(entry);
@@ -168,16 +218,14 @@ class Slot {
       .catch(() => {
         if (token !== this.token) return;
         this.frontPending = null;
-        const entry = this.c.textures.generated(`front:${a.id}`, () => drawFrontPlaceholder(a));
-        this.#set('front', this.case.frontMat, entry, entry.texture);
-        this.frontSize = 'gen';
+        this.#placeholderFront();
       });
   }
 
   /** Rückseite: Scan (ggf. mit Rücken) oder generiert mit Titelliste. */
   wantBack(priority) {
     const a = this.album;
-    if (!a) return;
+    if (!a || this.case.variant === 'slim') return; // Slim-Cases haben keine Rückseiten-Einlage
     if (a.art?.back) {
       if (this.backState) return;
       this.backState = 'loading';
@@ -187,23 +235,20 @@ class Slot {
         .then((entry) => {
           if (token !== this.token) return;
           this.backState = 'scan';
-          const aspect = entry.width / entry.height;
-          if (aspect >= SCAN_WITH_SPINES) {
-            const back = entry.texture.clone();
-            back.repeat.set(1 - 2 * SPINE_FRAC, 1);
-            back.offset.set(SPINE_FRAC, 0);
-            this.#set('back', this.case.backMat, entry, back);
+          const k = this.case;
+          const f = spineFraction(entry);
+          this.#set('back', k.backMat, entry, regionTexture(entry, k.backAspect, f, 1 - f));
+          if (f > 0 && k.hasSpines) {
+            // Scan mit Rücken: Ränder werden zu den echten CD-Rücken
             const hinge = entry.texture.clone();
-            hinge.repeat.set(SPINE_FRAC, 1);
-            hinge.offset.set(1 - SPINE_FRAC, 0);
+            hinge.repeat.set(f, 1);
+            hinge.offset.set(1 - f, 0);
             const other = entry.texture.clone();
-            other.repeat.set(SPINE_FRAC, 1);
+            other.repeat.set(f, 1);
             other.offset.set(0, 0);
             this.spineFromScan = true;
-            this.#set('spineH', this.case.spineHingeMat, entry, hinge);
-            this.#set('spineO', this.case.spineOtherMat, entry, other);
-          } else {
-            this.#set('back', this.case.backMat, entry, cropTexture(entry, BACK_ASPECT));
+            this.#set('spineH', k.spineHingeMat, entry, hinge);
+            this.#set('spineO', k.spineOtherMat, entry, other);
           }
         })
         .catch(() => {
@@ -212,9 +257,10 @@ class Slot {
       return;
     }
     const detail = this.detail ?? this.c.cachedDetail(a.id);
-    const key = `back:${a.id}:${this.color}:${detail ? 1 : 0}`;
+    const asp = this.case.backAspect;
+    const key = `back:${a.id}:${this.color}:${detail ? 1 : 0}:${asp.toFixed(3)}`;
     if (this.backState === key) return;
-    const entry = this.c.textures.generated(key, () => drawBack(a, detail, this.color));
+    const entry = this.c.textures.generated(key, () => drawBack(a, detail, this.color, asp));
     this.#set('back', this.case.backMat, entry, entry.texture);
     this.backState = key;
   }
@@ -235,15 +281,24 @@ class Slot {
       this.c.textures
         .load(artUrl(a, 'disc', 'md'), priority)
         .then((entry) => {
-          if (token === this.token) this.#set('disc', this.case.discMat, entry, entry.texture);
+          if (token !== this.token) return;
+          this.#set('disc', this.case.discMat, entry, entry.texture);
+          if (this.case.disc2Mat) this.#set('disc2', this.case.disc2Mat, entry, entry.texture);
         })
         .catch(() => {});
     } else {
       const fe = this.frontEntry;
-      const disc = this.c.textures.generated(`disc:${a.id}:${this.color}:${frontReady ? 1 : 0}`, () =>
-        drawDisc(a, this.color, fe?.image ?? null, fe?.flipped)
-      );
+      const two = !!this.case.disc2Mat;
+      const make = (label) =>
+        this.c.textures.generated(`disc:${a.id}:${this.color}:${frontReady ? 1 : 0}:${label}`, () =>
+          drawDisc(a, this.color, fe?.image ?? null, fe?.flipped, label)
+        );
+      const disc = make(two || a.discs > 1 ? 'CD 1' : '');
       this.#set('disc', this.case.discMat, disc, disc.texture);
+      if (two) {
+        const disc2 = make('CD 2');
+        this.#set('disc2', this.case.disc2Mat, disc2, disc2.texture);
+      }
     }
   }
 
@@ -275,6 +330,11 @@ export class Carousel {
     this.panel = { side: 'right', frac: 0 };
     this.raycaster = new THREE.Raycaster();
     this.onColor = () => {};
+    /** Welche Verpackung ein Album bekommt (wird von main.js gesetzt). */
+    this.variantFor = () => 'jewel';
+    this.centers = new Float64Array(0);
+    this.thick = new Float64Array(0);
+    this.poseInfo = { base: 0, selThick: CASE.D * 0.01 };
     stage.setCameraPreset(this.layout.camera, true);
   }
 
@@ -303,16 +363,40 @@ export class Carousel {
     for (const s of this.bound.values()) s.case.setEdgesVisible(edges);
   }
 
+  /** Einstellungen der Hüllen haben sich geändert: alle sichtbaren Hüllen neu aufbauen. */
   refreshAppearance() {
-    for (const s of this.bound.values()) {
-      s.case.setTray(this.settings.tray);
-      if (!s.spineFromScan) s.bind(s.album, s.index);
+    this.#computeShelf();
+    for (const s of this.bound.values()) s.bind(s.album, s.index);
+  }
+
+  /** Mittelpunkte im Regal (Hüllen sind je nach Verpackung unterschiedlich dick). */
+  #computeShelf() {
+    const view = this.store.view;
+    const n = view.length;
+    this.thick = new Float64Array(n);
+    this.centers = new Float64Array(n);
+    let x = 0;
+    for (let i = 0; i < n; i++) {
+      const t = variantDepth(this.variantFor(view[i]));
+      this.thick[i] = t;
+      this.centers[i] = x + t / 2;
+      x += t + SHELF_GAP;
     }
+  }
+
+  #interp(arr, pos) {
+    const n = arr.length;
+    if (!n) return 0;
+    const i = Math.max(0, Math.min(n - 1, Math.floor(pos)));
+    const j = Math.min(n - 1, i + 1);
+    const f = Math.max(0, Math.min(1, pos - i));
+    return arr[i] + (arr[j] - arr[i]) * f;
   }
 
   /** Albumliste hat sich geändert (Filter, Sortierung, Rescan). Unveränderte Hüllen bleiben stehen. */
   rebuild() {
     const view = this.store.view;
+    this.#computeShelf();
     const sig = (a) => `${a.id}|${a.art?.front}|${a.art?.back}|${a.art?.disc}|${a.trackCount}`;
     for (const [i, s] of this.bound) {
       const a = view[i];
@@ -372,16 +456,43 @@ export class Carousel {
     if (s) s.flipGoal += Math.PI;
   }
 
-  toggleLid(force) {
+  /**
+   * Öffnen/Schließen. Doppel-CD in drei Schritten: Deckel auf (CD 1) → Klapp-Tray um (CD 2) → zu.
+   * Liefert den neuen Zustand: 'closed' | 'open' | 'disc2'.
+   */
+  toggleLid() {
     const s = this.inspected;
-    if (!s) return false;
-    s.lidGoal = force ?? (s.lidGoal > 0.5 ? 0 : 1);
-    if (s.lidGoal > 0.5 && Math.cos(s.flipGoal) < 0) s.flipGoal += Math.PI; // zum Öffnen nach vorne drehen
-    return s.lidGoal > 0.5;
+    if (!s) return 'closed';
+    if (s.lidGoal < 0.5) {
+      s.lidGoal = 1;
+      s.trayGoal = 0;
+      if (Math.cos(s.flipGoal) < 0) s.flipGoal += Math.PI; // zum Öffnen nach vorne drehen
+    } else if (s.case.flipPivot && s.trayGoal < 0.5) {
+      s.trayGoal = 1;
+    } else {
+      s.lidGoal = 0;
+      s.trayGoal = 0;
+    }
+    return this.lidState();
+  }
+
+  lidState() {
+    const s = this.inspected;
+    if (!s || s.lidGoal < 0.5) return 'closed';
+    return s.trayGoal > 0.5 ? 'disc2' : 'open';
   }
 
   isLidOpen() {
-    return (this.inspected?.lidGoal ?? 0) > 0.5;
+    return this.lidState() !== 'closed';
+  }
+
+  /** Beschriftung für den Öffnen-Knopf. */
+  lidAction() {
+    const s = this.inspected;
+    const state = this.lidState();
+    if (state === 'closed') return 'Öffnen';
+    if (state === 'open' && s?.case.flipPivot) return 'CD 2';
+    return 'Schließen';
   }
 
   rotateBy(dx, dy) {
@@ -458,9 +569,19 @@ export class Carousel {
     up.setFromMatrixColumn(cam.matrixWorld, 1);
     const playingAlbum = this.player?.playing ? this.player.current?.album?.id : null;
 
+    const info = this.poseInfo;
+    const posCenter = this.#interp(this.centers, this.pos);
+    info.selThick = this.#interp(this.thick, this.pos);
     for (const [i, s] of this.bound) {
+      if (s.variant !== this.variantFor(s.album)) {
+        // Verpackung wurde geändert: neu aufbauen, Ansicht (herausgenommen, gedreht, offen) beibehalten
+        const keep = { e: s.e, flip: s.flip, flipGoal: s.flipGoal, yaw: s.yaw, pitch: s.pitch, lid: s.lid, lidGoal: s.lidGoal, tray: s.tray, trayGoal: s.trayGoal };
+        s.bind(s.album, i);
+        Object.assign(s, keep);
+      }
       const d = i - this.pos;
-      this.layout.pose(d, pose);
+      info.base = (this.centers[i] ?? 0) - posCenter;
+      this.layout.pose(d, pose, info);
       if (this.ib > 0.001 && i !== inspectIndex) {
         pose.x += Math.sign(d) * this.ib * 0.55;
         pose.z -= this.ib * 1.1;
@@ -483,7 +604,8 @@ export class Carousel {
           s.yawVel *= Math.exp(-dt * 5);
           s.pitchVel *= Math.exp(-dt * 5);
         }
-        s.case.setLid(ease(Math.min(1, s.lid)));
+        s.tray = damp(s.tray, s.trayGoal, reduceMotion ? 30 : 4, dt);
+        s.case.setLid(ease(Math.min(1, s.lid)), ease(Math.min(1, s.tray)));
         this.#inspectPose(s, time, reduceMotion, vB, qB);
         const k = ease(s.e);
         vA.lerp(vB, k);
@@ -496,13 +618,13 @@ export class Carousel {
       s.shadow.position.set(vA.x, 0.003, vA.z);
       eul.setFromQuaternion(qA, 'YXZ');
       s.shadow.rotation.set(-Math.PI / 2, eul.y, 0, 'YXZ');
-      s.shadow.scale.set(CASE_W * 1.25, CASE_D * 7, 1);
+      s.shadow.scale.set(CASE_W * 1.25, (variantDepth(s.variant) + 0.05) * 6, 1);
       s.shadow.material.opacity = 0.7 * (1 - s.e) * Math.max(0, 1 - Math.abs(d) / (W + 1));
 
       // CD dreht sich, wenn dieses Album läuft
       if (s.lid > 0.05 && playingAlbum && s.album.id === playingAlbum) {
         s.spin += dt * 4.2;
-        s.case.disc.rotation.z = -s.spin;
+        for (const disc of s.case.discs) disc.rotation.z = -s.spin;
       }
 
       // Texturen nach Bedarf
@@ -523,9 +645,11 @@ export class Carousel {
     const frac = this.panel.frac;
     const top = this.panel.top ?? 0;
     const lid = ease(Math.min(1, s.lid));
+    // Wie weit ragt der geöffnete Deckel zur Seite? (Digipak klappt weiter auf als ein Jewel-Case)
+    const reach = Math.max(0, -Math.cos(s.case.spec.open)) * lid;
     let dist = (CASE_H / 0.6 / (2 * tan)) * (1 + lid * 0.22);
     const usableW = 2 * tan * dist * cam.aspect * (side === 'right' ? 1 - frac : 1);
-    const needW = CASE_W * (1.35 + lid * 0.8);
+    const needW = CASE_W * (1.35 + reach * 1.3);
     if (usableW < needW) dist *= needW / usableW;
     const freeH = 1 - top - (side === 'bottom' ? frac : 0);
     const usableH = 2 * tan * dist * freeH;
@@ -534,7 +658,7 @@ export class Carousel {
     const visH = 2 * tan * dist;
     let sx = side === 'right' ? (-frac * visW) / 2 : 0;
     let sy = ((side === 'bottom' ? frac : 0) - top) / 2 * visH;
-    sx += lid * CASE_W * 0.36;
+    sx += reach * CASE_W * 0.6;
     outPos.copy(cam.position).addScaledVector(fwd, dist).addScaledVector(right, sx).addScaledVector(up, sy + 0.01);
     const sway = reduceMotion || this.rotating ? 0 : Math.sin(time * 0.6) * 0.07 * (1 - lid);
     eul.set(s.pitch + lid * 0.12, s.yaw + s.flip + sway + lid * 0.42, 0, 'XYZ');

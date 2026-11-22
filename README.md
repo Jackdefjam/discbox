@@ -12,7 +12,7 @@
 
 ## Was discbox kann
 
-- **Echte Jewel-Case-Modelle** in Originalmaßen (142 × 125 × 10,4 mm): Frontcover im Deckel, Rückseite mit beiden CD-Rücken, schwarzer Tray, aufklappbarer Deckel, bedruckte CD, Booklet-Innenseite.
+- **Vier Hüllenarten in Originalmaßen:** Jewel-Case (142 × 125 × 10,4 mm), Slim-Case (5,2 mm), Doppel-CD-Hülle (22 mm, mit Klapp-Tray) und Digipak (Pappe). Mit Frontcover, Rückseite samt CD-Rücken, Tray, aufklappbarem Deckel, bedruckter CD und Booklet-Innenseite. Die passende Hülle wird automatisch gewählt und lässt sich pro Album ändern.
 - **Drei Anordnungen:** Coverflow, Regal (Rücken an Rücken wie im CD-Regal) und Rad.
 - **Fünf Themes** (Studio, Neon Arcade, Wohnzimmer, Mitternacht, Galerie hell) plus eigene Themes als JSON-Datei. Der Hintergrund färbt sich passend zum gewählten Album.
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
@@ -82,6 +82,30 @@ docker compose -f docker-compose.build.yml up -d --build
 
 ---
 
+## Hüllenarten
+
+![Hüllenarten](docs/huellen.jpg)
+
+*Oben: Slim-Case und Doppel-CD-Hülle. Unten: geöffnete Doppel-CD (Klapp-Tray umgelegt, CD 2 sichtbar) und geöffnetes Digipak.*
+
+| Hülle | Maße | Besonderheit |
+| --- | --- | --- |
+| **Jewel-Case** | 142 × 125 × 10,4 mm | Standard: Booklet im Deckel, Tray-Card mit zwei bedruckten Rücken |
+| **Slim-Case** | 142 × 125 × 5,2 mm | dünn, schwarzer Tray als Rückwand, keine Rücken-Einlage (wie im Original) |
+| **Doppel-CD** | 142 × 125 × 22 mm | breiter Rücken; Öffnen zeigt CD 1 auf dem Klapp-Tray, nochmal Öffnen klappt ihn um → CD 2 |
+| **Digipak** | 139,7 × 125,5 × 7,5 mm | Pappe ohne Plastikhülle, Cover über die ganze Fläche, klappt wie ein Buch auf |
+
+**So wählt discbox die Hülle aus** (die erste passende Regel gilt):
+
+1. Deine Festlegung für das Album: Detailansicht → **Hülle** oder Taste **C**. Gespeichert auf dem Server, gilt also auf allen Geräten.
+2. Die Verpackung laut MusicBrainz („Digipak“, „Slim Jewel Case“ …). discbox schlägt sie einmal pro Album im Hintergrund nach.
+3. Mehr als eine CD → Doppel-CD-Hülle.
+4. Die Standard-Hülle aus den Einstellungen (Jewel-Case, wenn nichts anderes eingestellt ist).
+
+Regel 2 und 3 lassen sich in den Einstellungen unter *CD-Hülle → Hülle automatisch wählen* abschalten. Im Regal sind die Hüllen unterschiedlich dick, so wie im echten CD-Regal:
+
+![Regal mit verschiedenen Hüllen](docs/regal-huellen.jpg)
+
 ## Ordner, Cover und Scans
 
 discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare, MP4) klappt es am besten; ohne Tags werden Ordner- und Dateinamen ausgewertet.
@@ -114,7 +138,7 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, Enter ansehen, P abspielen, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, B Booklet, Esc zurück |
+| **Tastatur** | ← → blättern, Enter ansehen, P abspielen, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
 | **Gamepad** | Steuerkreuz/Stick blättern, A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.
@@ -132,6 +156,7 @@ Lege eine JSON-Datei in den Ordner `themes` innerhalb deines Daten-Ordners (z. B
 | `PORT` | `8080` | Port im Container |
 | `DISCBOX_PASSWORD` | – | Passwortschutz aktivieren (Benutzername `discbox`, änderbar mit `DISCBOX_USER`) |
 | `ONLINE_COVERS` | `true` | fehlende Cover bei MusicBrainz suchen |
+| `ONLINE_PACKAGING` | `true` | Verpackungsart (Digipak, Slim …) bei MusicBrainz nachschlagen |
 | `MUSICBRAINZ_CONTACT` | Repo-URL | Kontaktangabe für MusicBrainz (am besten deine E-Mail) |
 | `SCAN_ON_START` | `true` | beim Start auf Änderungen prüfen |
 | `SCAN_INTERVAL_MINUTES` | `360` | regelmäßig neu einlesen (`0` = nie) |

@@ -32,14 +32,15 @@ export const LAYOUTS = {
     window: 28,
     lowWindow: 16,
     camera: { pos: [0, 0.92, 5.1], target: [0, 0.6, 0], fitWidth: 3.2 },
-    pose(d, out) {
+    // info.base: Abstand der Rückenmitten (Hüllen sind je nach Verpackung unterschiedlich dick)
+    pose(d, out, info) {
       const a = Math.abs(d);
       const s = sign(d);
       const t = Math.min(a, 1);
       const e = t * t * (3 - 2 * t);
-      const rest = Math.max(a - 1, 0);
-      const edge = CASE_W / 2 + 0.1 + CASE_D / 2;
-      out.x = s * (e * edge + rest * (CASE_D + 0.008));
+      const base = info ? info.base : d * (CASE_D + 0.008);
+      const sel = info ? info.selThick : CASE_D;
+      out.x = base + s * e * (CASE_W / 2 + 0.1 - sel / 2);
       out.y = 0;
       out.z = (1 - e) * 0.5 - e * 0.35;
       // Rücken (Scharnierseite) zeigt zur Kamera

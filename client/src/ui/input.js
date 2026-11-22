@@ -118,6 +118,10 @@ export class Input {
       case 'B':
         if (inspect) actions.openBooklet();
         break;
+      case 'c':
+      case 'C':
+        if (inspect) actions.cycleCase();
+        break;
       case 'l':
       case 'L':
         actions.cycleLayout();

@@ -134,6 +134,14 @@ export function createApp({ config, log, library, transcoder }) {
     res.status(202).json({ queued: true, mbid });
   });
 
+  const CASE_VARIANTS = ['auto', 'jewel', 'slim', 'double', 'digipak'];
+  app.put('/api/albums/:id/case', async (req, res) => {
+    const variant = String(req.body?.variant ?? '');
+    if (!CASE_VARIANTS.includes(variant)) return res.status(400).json({ error: `Unbekannte Hülle: ${variant}` });
+    if (!(await library.setCaseVariant(req.params.id, variant))) return res.status(404).json({ error: 'Album nicht gefunden' });
+    res.json({ id: req.params.id, caseVariant: variant === 'auto' ? null : variant });
+  });
+
   app.get('/api/themes', async (_req, res) => {
     res.json(await loadCustomThemes(config.dataDir, log));
   });

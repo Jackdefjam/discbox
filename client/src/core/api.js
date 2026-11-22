@@ -23,6 +23,12 @@ export const api = {
   album: (id) => request(`/api/albums/${encodeURIComponent(id)}`),
   themes: () => request('/api/themes').catch(() => []),
   scan: (full = false) => post('/api/scan', { full }),
+  setCase: (id, variant) =>
+    request(`/api/albums/${encodeURIComponent(id)}/case`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant })
+    }),
   lookupOnline: (id, mbid) => post(`/api/albums/${encodeURIComponent(id)}/online`, mbid ? { mbid } : {})
 };
 

@@ -131,12 +131,13 @@ export function drawFrontPlaceholder(album, size = 1024) {
 }
 
 /**
- * CD-Rücken (6,5 × 118 mm). Breite → Tiefe der Hülle, Höhe → Höhe der Hülle.
+ * CD-Rücken (Standard 6,5 × 118 mm; Doppel-CD und Digipak breiter). Breite → Tiefe der Hülle.
  * direction: 'down' = von oben nach unten lesbar (international üblich), 'up' = von unten nach oben.
  */
-export function drawSpine(album, color, direction = 'down') {
-  const w = 96;
+export function drawSpine(album, color, direction = 'down', widthMM = 6.5) {
+  const w = Math.min(360, Math.round((96 * widthMM) / 6.5));
   const h = 1744;
+  const k = Math.min(2.1, w / 96); // Schrift wächst mit der Rückenbreite
   const c = canvas(w, h);
   const ctx = c.getContext('2d');
   const bg = mixHex(color, '#000000', 0.38);
@@ -158,21 +159,24 @@ export function drawSpine(album, color, direction = 'down') {
   }
   // Jetzt verläuft x entlang der Rückenlänge, y quer dazu (0 = Mitte)
   const pad = 70;
-  const yearText = album.year ? String(album.year) : '';
+  const discs = album.discs > 1 ? `${album.discs} CD` : '';
+  const yearText = [album.year, discs].filter(Boolean).join('  ·  ');
   ctx.textBaseline = 'middle';
   ctx.fillStyle = fg;
-  ctx.font = `500 34px ${FONT_TEXT}`;
+  const yearSize = Math.round(34 * Math.min(k, 1.5));
+  ctx.font = `500 ${yearSize}px ${FONT_TEXT}`;
   const yearW = yearText ? ctx.measureText(yearText).width + 40 : 0;
   const avail = h - pad * 2 - yearW;
   const artist = album.artist.toUpperCase();
   const title = album.title.toUpperCase();
-  ctx.font = `700 50px ${FONT_TITLE}`;
+  const base = Math.round(50 * k);
+  ctx.font = `700 ${base}px ${FONT_TITLE}`;
   const artistW = ctx.measureText(artist).width;
-  ctx.font = `400 50px ${FONT_TITLE}`;
+  ctx.font = `400 ${base}px ${FONT_TITLE}`;
   const titleW = ctx.measureText(title).width;
-  const sep = 46;
+  const sep = 46 * k;
   const scale = Math.min(1, avail / (artistW + sep + titleW));
-  const size = Math.max(30, Math.round(50 * scale));
+  const size = Math.max(30, Math.round(base * scale));
   ctx.font = `700 ${size}px ${FONT_TITLE}`;
   const a = ellipsize(ctx, artist, avail * 0.48);
   const aw = ctx.measureText(a).width;
@@ -182,7 +186,7 @@ export function drawSpine(album, color, direction = 'down') {
   ctx.fillText(ellipsize(ctx, title, avail - aw - sep), pad + aw + sep, 2);
   ctx.globalAlpha = 1;
   if (yearText) {
-    ctx.font = `500 34px ${FONT_TEXT}`;
+    ctx.font = `500 ${yearSize}px ${FONT_TEXT}`;
     ctx.textAlign = 'right';
     ctx.globalAlpha = 0.75;
     ctx.fillText(yearText, h - pad, 2);
@@ -225,8 +229,8 @@ function barcode(ctx, x, y, w, h, seed) {
 }
 
 /** Rückseite (Tray-Card ohne Rücken, 138 × 118 mm). */
-export function drawBack(album, detail, color) {
-  const w = 1380;
+export function drawBack(album, detail, color, aspect = 1380 / 1180) {
+  const w = Math.round(1180 * aspect);
   const h = 1180;
   const c = canvas(w, h);
   const ctx = c.getContext('2d');
@@ -364,7 +368,7 @@ export function drawInlay(album, detail, color) {
  * Bedruckte CD. Nutzt das Frontcover als Aufdruck (wie bei vielen echten CDs).
  * image: optionales Bild (HTMLImageElement/ImageBitmap); flipped: Bild liegt kopfüber vor (ImageBitmap).
  */
-export function drawDisc(album, color, image, flipped) {
+export function drawDisc(album, color, image, flipped, label = '') {
   const size = 1024;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
@@ -426,6 +430,22 @@ export function drawDisc(album, color, image, flipped) {
     ctx.globalAlpha = 1;
   }
   ctx.restore();
+
+  // „CD 1“ / „CD 2“ bei Mehrfach-Alben
+  if (label) {
+    ctx.save();
+    ctx.font = `700 34px ${FONT_TEXT}`;
+    const w = ctx.measureText(label).width + 36;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.roundRect?.(-w / 2, -40 * mm, w, 52, 26) ?? ctx.rect(-w / 2, -40 * mm, w, 52);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, -40 * mm + 27);
+    ctx.restore();
+  }
 
   // Feine Kanten
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';

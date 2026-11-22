@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS = {
   idleMinutes: 0,
   spineDirection: 'down',
   tray: 'black',
+  caseAuto: true,
+  defaultCase: 'jewel',
   volume: 0.85,
   lastAlbumId: null
 };

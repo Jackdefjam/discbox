@@ -17,6 +17,8 @@ export class Library extends EventEmitter {
     this.config = config;
     this.log = log;
     this.file = path.join(config.dataDir, 'library.json');
+    this.overridesFile = path.join(config.dataDir, 'overrides.json');
+    this.overrides = {}; // eigene Festlegungen je Album (z. B. Hüllenart), überstehen jeden Scan
     this.files = {};
     this.embedded = {};
     this.albums = [];
@@ -31,6 +33,7 @@ export class Library extends EventEmitter {
       log,
       fetchImpl,
       enabled: config.onlineCovers,
+      packaging: config.onlinePackaging,
       onResult: (id) => this.#applyOnline(id)
     });
   }
@@ -38,6 +41,7 @@ export class Library extends EventEmitter {
   async init() {
     fs.mkdirSync(this.config.dataDir, { recursive: true });
     await this.online.load();
+    this.overrides = await readJson(this.overridesFile, {});
     const saved = await readJson(this.file, null);
     if (saved?.schema === SCHEMA) {
       this.files = saved.files ?? {};
@@ -224,6 +228,7 @@ export class Library extends EventEmitter {
   /** Lokale Bilder haben Vorrang, Online-Funde füllen Lücken. */
   #mergeArt(album) {
     const online = this.online.artFor(album.id);
+    album.packaging = this.online.packagingOf(album.id);
     album.art = {};
     for (const k of KINDS) {
       const ref = album.localArt?.[k] ?? online[k] ?? null;
@@ -234,9 +239,10 @@ export class Library extends EventEmitter {
   #applyOnline(albumId) {
     const album = this.byId.get(albumId);
     if (!album) return;
-    const before = KINDS.map((k) => album.art?.[k]?.v ?? '').join('|');
+    const sig = () => KINDS.map((k) => album.art?.[k]?.v ?? '').join('|') + `|${album.packaging ?? ''}`;
+    const before = sig();
     this.#mergeArt(album);
-    const after = KINDS.map((k) => album.art?.[k]?.v ?? '').join('|');
+    const after = sig();
     if (before !== after) {
       this.version++;
       this.#saveSoon();
@@ -257,6 +263,21 @@ export class Library extends EventEmitter {
     return true;
   }
 
+  /** Hüllenart für ein Album festlegen ('auto' entfernt die Festlegung). */
+  async setCaseVariant(albumId, variant) {
+    if (!this.byId.has(albumId)) return false;
+    const o = { ...(this.overrides[albumId] ?? {}) };
+    if (!variant || variant === 'auto') delete o.case;
+    else o.case = variant;
+    if (Object.keys(o).length) this.overrides[albumId] = o;
+    else delete this.overrides[albumId];
+    await writeJsonAtomic(this.overridesFile, this.overrides);
+    this.version++;
+    this.#saveSoon();
+    this.emit('change');
+    return true;
+  }
+
   // ---------- Ausgabe für die API ----------
 
   summary(a) {
@@ -273,7 +294,9 @@ export class Library extends EventEmitter {
       format: a.format,
       addedAt: a.addedAt,
       art: Object.fromEntries(KINDS.map((k) => [k, a.art?.[k]?.v ?? null])),
-      gallery: a.gallery?.length ?? 0
+      gallery: a.gallery?.length ?? 0,
+      caseVariant: this.overrides[a.id]?.case ?? null,
+      packaging: a.packaging ?? null
     };
   }
 

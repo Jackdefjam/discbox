@@ -90,6 +90,25 @@ test('Mit lokalem Frontcover wird nur die Rückseite geladen', async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test('Verpackung wird gemerkt, auch wenn alle Bilder lokal vorhanden sind', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'discbox-online-'));
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    return { ok: true, status: 200, json: async () => ({ releases: [{ id: R1, score: 100, 'track-count': 5, media: [{ format: 'CD' }], packaging: 'Digipak' }]}) };
+  };
+  const online = new OnlineCovers({ dataDir, contact: 'test', fetchImpl, mbDelay: 0 });
+  const local = { front: { rel: 'a' }, back: { rel: 'b' }, disc: { rel: 'c' } };
+  const album = { id: 'p', title: 'Ocean Tapes', artist: 'Marlow Bay', trackCount: 5, localArt: local };
+  assert.equal(online.shouldLookup(album, []), true, 'einmal nachschlagen');
+  const result = await online.lookup(album);
+  assert.equal(result.packaging, 'Digipak');
+  assert.equal(result.status, 'found');
+  assert.equal(calls.length, 1, 'keine Anfragen an das Cover Art Archive');
+  assert.equal(online.shouldLookup(album, []), false, 'danach nicht erneut');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test('Ohne Treffer: Status notfound, kein Absturz', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'discbox-online-'));
   const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ releases: [] }) });

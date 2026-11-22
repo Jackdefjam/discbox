@@ -8,7 +8,7 @@ services:
     container_name: discbox
     restart: unless-stopped
     ports:
-      - "8095:8080"
+      - "619:8080"
     volumes:
       - /volume1/Musik:/music:ro
       - ./data:/data

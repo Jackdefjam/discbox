@@ -11,7 +11,7 @@ services:
     container_name: discbox
     restart: unless-stopped
     ports:
-      - "8095:8080"            # Aufruf im Browser: http://<NAS-IP>:8095
+      - "619:8080"            # Aufruf im Browser: http://<NAS-IP>:619
     volumes:
       - /volume1/Musik:/music:ro             # ← dein Musikordner (nur lesend)
       - /volume1/docker/discbox/data:/data   # ← Cache, Cover, Einstellungen

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { artUrl } from '../core/api.js';
 import { drawBack, drawDisc, drawFrontPlaceholder, drawInlay, drawSpine } from './artgen.js';
 import { albumHashColor } from './color.js';
-import { CASE, CASE_D, CASE_H, CASE_W, JewelCase, variantDepth } from './jewelcase.js';
+import { CASE, CASE_D, CASE_H, CASE_W, JewelCase } from './jewelcase.js';
 import { LAYOUTS } from './layouts.js';
 import { BOARD_W, MARGIN, ROW_H, ShelfWall } from './shelfwall.js';
 
@@ -61,8 +61,7 @@ function spineFraction(entry) {
 class Slot {
   constructor(carousel) {
     this.c = carousel;
-    this.cases = new Map(); // je Variante eine Hülle, wird bei Bedarf gewechselt
-    this.case = this.#caseFor('jewel');
+    this.case = new JewelCase(carousel.factory);
     this.body = this.case.group;
     this.shadow = new THREE.Mesh(carousel.factory.geo.shadow, carousel.factory.shadowMat.clone());
     this.shadow.renderOrder = 1;
@@ -75,34 +74,10 @@ class Slot {
     this.reset();
   }
 
-  #caseFor(variant) {
-    let k = this.cases.get(variant);
-    if (!k) {
-      k = new JewelCase(this.c.factory, variant);
-      k.group.visible = false;
-      this.cases.set(variant, k);
-    }
-    return k;
-  }
-
-  /** Wechselt das 3D-Modell, wenn das Album eine andere Verpackung hat. */
-  #useVariant(variant) {
-    if (this.case.variant === variant) return;
-    const next = this.#caseFor(variant);
-    this.c.scene.remove(this.body);
-    this.case.group.visible = false;
-    this.case = next;
-    this.body = next.group;
-    this.c.scene.add(this.body);
-    this.case.setLid(0);
-  }
-
   reset() {
     this.e = 0;
     this.lid = 0;
     this.lidGoal = 0;
-    this.tray = 0;
-    this.trayGoal = 0;
     this.flip = 0;
     this.flipGoal = 0;
     this.yaw = 0;
@@ -134,8 +109,6 @@ class Slot {
 
   bind(album, index) {
     this.unbind();
-    this.#useVariant(this.c.variantFor(album));
-    this.variant = this.case.variant;
     this.album = album;
     this.index = index;
     this.token++;
@@ -161,6 +134,7 @@ class Slot {
 
   #placeholderFront() {
     const a = this.album;
+    if (!a) return;
     const entry = this.c.textures.generated(`front:${a.id}`, () => drawFrontPlaceholder(a));
     const asp = this.case.frontAspect;
     this.#set('front', this.case.frontMat, entry, asp === 1 ? entry.texture : cropTexture(entry, asp));
@@ -168,6 +142,8 @@ class Slot {
   }
 
   unbind() {
+    this.token++; // laufende Ladevorgänge für das alte Album verwerfen
+    this.frontPending = null;
     for (const role of [...this.held.keys()]) this.#hold(role, null, null);
     for (const t of this.clones.values()) t.dispose();
     this.clones.clear();
@@ -226,7 +202,7 @@ class Slot {
   /** Rückseite: Scan (ggf. mit Rücken) oder generiert mit Titelliste. */
   wantBack(priority) {
     const a = this.album;
-    if (!a || this.case.variant === 'slim') return; // Slim-Cases haben keine Rückseiten-Einlage
+    if (!a) return;
     if (a.art?.back) {
       if (this.backState) return;
       this.backState = 'loading';
@@ -284,22 +260,14 @@ class Slot {
         .then((entry) => {
           if (token !== this.token) return;
           this.#set('disc', this.case.discMat, entry, entry.texture);
-          if (this.case.disc2Mat) this.#set('disc2', this.case.disc2Mat, entry, entry.texture);
         })
         .catch(() => {});
     } else {
       const fe = this.frontEntry;
-      const two = !!this.case.disc2Mat;
-      const make = (label) =>
-        this.c.textures.generated(`disc:${a.id}:${this.color}:${frontReady ? 1 : 0}:${label}`, () =>
-          drawDisc(a, this.color, fe?.image ?? null, fe?.flipped, label)
-        );
-      const disc = make(two || a.discs > 1 ? 'CD 1' : '');
+      const disc = this.c.textures.generated(`disc:${a.id}:${this.color}:${frontReady ? 1 : 0}`, () =>
+        drawDisc(a, this.color, fe?.image ?? null, fe?.flipped)
+      );
       this.#set('disc', this.case.discMat, disc, disc.texture);
-      if (two) {
-        const disc2 = make('CD 2');
-        this.#set('disc2', this.case.disc2Mat, disc2, disc2.texture);
-      }
     }
   }
 
@@ -331,8 +299,6 @@ export class Carousel {
     this.panel = { side: 'right', frac: 0 };
     this.raycaster = new THREE.Raycaster();
     this.onColor = () => {};
-    /** Welche Verpackung ein Album bekommt (wird von main.js gesetzt). */
-    this.variantFor = () => 'jewel';
     this.centers = new Float64Array(0);
     this.thick = new Float64Array(0);
     this.poseInfo = { base: 0, selThick: CASE.D * 0.01 };
@@ -425,7 +391,7 @@ export class Carousel {
     this.centers = new Float64Array(n);
     let x = 0;
     for (let i = 0; i < n; i++) {
-      const t = variantDepth(this.variantFor(view[i]));
+      const t = CASE_D;
       this.thick[i] = t;
       this.centers[i] = x + t / 2;
       x += t + SHELF_GAP;
@@ -584,30 +550,22 @@ export class Carousel {
     if (s) s.flipGoal += Math.PI;
   }
 
-  /**
-   * Öffnen/Schließen. Doppel-CD in drei Schritten: Deckel auf (CD 1) → Klapp-Tray um (CD 2) → zu.
-   * Liefert den neuen Zustand: 'closed' | 'open' | 'disc2'.
-   */
+  /** Öffnen/Schließen. Liefert den neuen Zustand: 'closed' | 'open'. */
   toggleLid() {
     const s = this.inspected;
     if (!s) return 'closed';
     if (s.lidGoal < 0.5) {
       s.lidGoal = 1;
-      s.trayGoal = 0;
       if (Math.cos(s.flipGoal) < 0) s.flipGoal += Math.PI; // zum Öffnen nach vorne drehen
-    } else if (s.case.flipPivot && s.trayGoal < 0.5) {
-      s.trayGoal = 1;
     } else {
       s.lidGoal = 0;
-      s.trayGoal = 0;
     }
     return this.lidState();
   }
 
   lidState() {
     const s = this.inspected;
-    if (!s || s.lidGoal < 0.5) return 'closed';
-    return s.trayGoal > 0.5 ? 'disc2' : 'open';
+    return !s || s.lidGoal < 0.5 ? 'closed' : 'open';
   }
 
   isLidOpen() {
@@ -616,11 +574,7 @@ export class Carousel {
 
   /** Beschriftung für den Öffnen-Knopf. */
   lidAction() {
-    const s = this.inspected;
-    const state = this.lidState();
-    if (state === 'closed') return 'Öffnen';
-    if (state === 'open' && s?.case.flipPivot) return 'CD 2';
-    return 'Schließen';
+    return this.lidState() === 'closed' ? 'Öffnen' : 'Schließen';
   }
 
   rotateBy(dx, dy) {
@@ -746,12 +700,6 @@ export class Carousel {
     const posCenter = this.#interp(this.centers, this.pos);
     info.selThick = this.#interp(this.thick, this.pos);
     for (const [i, s] of this.bound) {
-      if (s.variant !== this.variantFor(s.album)) {
-        // Verpackung wurde geändert: neu aufbauen, Ansicht (herausgenommen, gedreht, offen) beibehalten
-        const keep = { e: s.e, flip: s.flip, flipGoal: s.flipGoal, yaw: s.yaw, pitch: s.pitch, lid: s.lid, lidGoal: s.lidGoal, tray: s.tray, trayGoal: s.trayGoal };
-        s.bind(s.album, i);
-        Object.assign(s, keep);
-      }
       let d = i - this.pos;
       s.case.setFavorite(s.album.favorite);
       if (m) {
@@ -798,8 +746,7 @@ export class Carousel {
           s.yawVel *= Math.exp(-dt * 5);
           s.pitchVel *= Math.exp(-dt * 5);
         }
-        s.tray = damp(s.tray, s.trayGoal, reduceMotion ? 30 : 4, dt);
-        s.case.setLid(ease(Math.min(1, s.lid)), ease(Math.min(1, s.tray)));
+        s.case.setLid(ease(Math.min(1, s.lid)));
         this.#inspectPose(s, time, reduceMotion, vB, qB);
         const k = ease(s.e);
         vA.lerp(vB, k);
@@ -812,7 +759,7 @@ export class Carousel {
       s.shadow.position.set(vA.x, (m ? m.y[i] : 0) + 0.003, vA.z);
       eul.setFromQuaternion(qA, 'YXZ');
       s.shadow.rotation.set(-Math.PI / 2, eul.y, 0, 'YXZ');
-      s.shadow.scale.set(CASE_W * 1.25, (variantDepth(s.variant) + 0.05) * 6, 1);
+      s.shadow.scale.set(CASE_W * 1.25, (CASE_D + 0.05) * 6, 1);
       s.shadow.material.opacity = m
         ? 0.5 * (1 - s.e)
         : 0.7 * (1 - s.e) * Math.max(0, 1 - Math.abs(d) / (W + 1));

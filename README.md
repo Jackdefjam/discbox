@@ -12,7 +12,7 @@
 
 ## Was discbox kann
 
-- **Vier Hüllenarten in Originalmaßen:** Jewel-Case (142 × 125 × 10,4 mm), Slim-Case (5,2 mm), Doppel-CD-Hülle (22 mm, mit Klapp-Tray) und Digipak (Pappe). Mit Frontcover, Rückseite samt CD-Rücken, Tray, aufklappbarem Deckel, bedruckter CD und Booklet-Innenseite. Die passende Hülle wird automatisch gewählt und lässt sich pro Album ändern.
+- **Originalgetreues Jewel-Case** (142 × 125 × 10,4 mm): klarer Deckel und klares Unterteil mit echten Plastikkanten, schwarzer Tray mit geriffeltem Scharnier-Steg und Rosette. Dazu Frontcover, Rückseite samt CD-Rücken, aufklappbarer Deckel, bedruckte CD und Booklet-Innenseite.
 - **Drei Anordnungen:** Coverflow, Regalwand (mehrere Böden übereinander, nach Genre, Jahrzehnt oder Künstler einsortiert, Rücken an Rücken wie im CD-Regal) und Rad.
 - **Fünf Themes** (Studio, Neon Arcade, Wohnzimmer, Mitternacht, Galerie hell) plus eigene Themes als JSON-Datei. Der Hintergrund färbt sich passend zum gewählten Album.
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
@@ -105,29 +105,21 @@ In der Anordnung **Regal** stehen die Alben auf mehreren Böden übereinander. J
 
 Coverflow und Rad bleiben eine durchgehende Reihe ohne Einteilung.
 
-## Hüllenarten
+## Die CD-Hülle
 
-![Hüllenarten](docs/huellen.jpg)
+Jedes Album liegt in einem Standard-Jewel-Case, nachgebaut nach dem Original (Philips, 1982) in echten Maßen: 142 × 125 × 10,4 mm.
 
-*Oben: Slim-Case und Doppel-CD-Hülle. Unten: geöffnete Doppel-CD (Klapp-Tray umgelegt, CD 2 sichtbar) und geöffnetes Digipak.*
+| Vorne, ohne Booklet | Schräg mit Rücken |
+| --- | --- |
+| ![Jewel-Case von vorne](docs/huelle-vorne.jpg) | ![Jewel-Case schräg](docs/huelle-schraeg.jpg) |
 
-| Hülle | Maße | Besonderheit |
-| --- | --- | --- |
-| **Jewel-Case** | 142 × 125 × 10,4 mm | Standard: Booklet im Deckel, Tray-Card mit zwei bedruckten Rücken |
-| **Slim-Case** | 142 × 125 × 5,2 mm | dünn, schwarzer Tray als Rückwand, keine Rücken-Einlage (wie im Original) |
-| **Doppel-CD** | 142 × 125 × 22 mm | breiter Rücken; Öffnen zeigt CD 1 auf dem Klapp-Tray, nochmal Öffnen klappt ihn um → CD 2 |
-| **Digipak** | 139,7 × 125,5 × 7,5 mm | Pappe ohne Plastikhülle, Cover über die ganze Fläche, klappt wie ein Buch auf |
+- **Klares Unterteil und klarer Deckel** mit Wandstärke, Fasen und hellen Plastikkanten. Durch die Flächen sieht man hindurch, die Kanten wirken wie bei echtem Polystyrol.
+- **Schwarzer Tray** mit geriffeltem Steg am Scharnier, CD-Mulde, Rosette mit 16 Zähnen und zwei Rastschlitzen rechts.
+- **Scharnier:** Der Deckel dreht sich um die Zapfen seiner Scharnierarme. Innen sind vier halbrunde Booklet-Halter, außerdem die Rastnasen.
+- **Papier:** Das Booklet ist 120 × 120 mm groß und liegt unter dem Deckel. Die Tray-Card misst 138 × 118 mm und hat zwei bedruckte Rücken von je 6,5 mm. Ein Scan mit Rücken wird automatisch aufgeteilt.
+- In den Einstellungen unter *CD-Hülle* lassen sich die Schriftrichtung auf dem Rücken und die Farbe des Trays (schwarz oder klar) einstellen.
 
-**So wählt discbox die Hülle aus** (die erste passende Regel gilt):
-
-1. Deine Festlegung für das Album: Detailansicht → **Hülle** oder Taste **C**. Gespeichert auf dem Server, gilt also auf allen Geräten.
-2. Die Verpackung laut MusicBrainz („Digipak“, „Slim Jewel Case“ …). discbox schlägt sie einmal pro Album im Hintergrund nach.
-3. Mehr als eine CD → Doppel-CD-Hülle.
-4. Die Standard-Hülle aus den Einstellungen (Jewel-Case, wenn nichts anderes eingestellt ist).
-
-Regel 2 und 3 lassen sich in den Einstellungen unter *CD-Hülle → Hülle automatisch wählen* abschalten. Im Regal sind die Hüllen unterschiedlich dick, so wie im echten CD-Regal:
-
-![Regal mit verschiedenen Hüllen](docs/regal-huellen.jpg)
+Slim-Cases, Doppel-CD-Hüllen und Digipaks sind vorerst entfernt. Alle Alben, auch solche mit mehreren CDs, liegen in normalen Jewel-Cases.
 
 ## Ordner, Cover und Scans
 
@@ -161,7 +153,7 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
+| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, B Booklet, Esc zurück |
 | **Gamepad** | Steuerkreuz/Stick blättern (im Regal hoch/runter: Boden wechseln), A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.
@@ -179,7 +171,7 @@ Lege eine JSON-Datei in den Ordner `themes` innerhalb deines Daten-Ordners (z. B
 | `PORT` | `8080` | Port im Container |
 | `DISCBOX_PASSWORD` | – | Passwortschutz aktivieren (Benutzername `discbox`, änderbar mit `DISCBOX_USER`) |
 | `ONLINE_COVERS` | `true` | fehlende Cover bei MusicBrainz suchen |
-| `ONLINE_PACKAGING` | `true` | Verpackungsart (Digipak, Slim …) bei MusicBrainz nachschlagen |
+| `ONLINE_PACKAGING` | `false` | Verpackungsart (Digipak, Slim …) bei MusicBrainz nachschlagen – derzeit ungenutzt, da discbox nur Jewel-Cases zeigt |
 | `MUSICBRAINZ_CONTACT` | Repo-URL | Kontaktangabe für MusicBrainz (am besten deine E-Mail) |
 | `SCAN_ON_START` | `true` | beim Start auf Änderungen prüfen |
 | `SCAN_INTERVAL_MINUTES` | `360` | regelmäßig neu einlesen (`0` = nie) |

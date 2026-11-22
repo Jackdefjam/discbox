@@ -23,7 +23,8 @@ export function loadConfig(overrides = {}) {
     user: env.DISCBOX_USER || 'discbox',
     password: env.DISCBOX_PASSWORD || '',
     onlineCovers: bool(env.ONLINE_COVERS, true),
-    onlinePackaging: bool(env.ONLINE_PACKAGING, true),
+    // Verpackungsart nur für spätere Hüllenarten nötig; derzeit zeigt discbox nur Jewel-Cases
+    onlinePackaging: bool(env.ONLINE_PACKAGING, false),
     contact: env.MUSICBRAINZ_CONTACT || 'https://github.com/Jackdefjam/discbox',
     scanOnStart: bool(env.SCAN_ON_START, true),
     scanIntervalMinutes: Math.max(0, int(env.SCAN_INTERVAL_MINUTES, 360)),

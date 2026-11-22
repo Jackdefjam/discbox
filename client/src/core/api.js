@@ -30,12 +30,6 @@ export const api = {
       body: JSON.stringify({ favorite })
     }),
   setFavorites: (ids, favorite) => post('/api/favorites', { ids, favorite }),
-  setCase: (id, variant) =>
-    request(`/api/albums/${encodeURIComponent(id)}/case`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ variant })
-    }),
   lookupOnline: (id, mbid) => post(`/api/albums/${encodeURIComponent(id)}/online`, mbid ? { mbid } : {})
 };
 

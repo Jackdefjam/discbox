@@ -16,11 +16,9 @@ export const DEFAULT_SETTINGS = {
   idleMinutes: 0,
   spineDirection: 'down',
   tray: 'black',
-  caseAuto: true,
   startView: 'favorites',
   shelfGroup: 'genre',
   completeOnly: false,
-  defaultCase: 'jewel',
   volume: 0.85,
   lastAlbumId: null
 };

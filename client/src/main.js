@@ -4,14 +4,13 @@ import '@fontsource/oswald/700.css';
 import './style.css';
 
 import { api } from './core/api.js';
-import { resolveCase } from './core/casevariant.js';
 import { Player } from './core/player.js';
 import { Store } from './core/store.js';
 import { applyThemeCss, buildThemeList } from './core/themes.js';
 import { Carousel } from './scene/carousel.js';
 import { albumHashColor } from './scene/color.js';
 import { createCaseEnvironment } from './scene/environment.js';
-import { CaseFactory, VARIANT_ORDER, VARIANTS } from './scene/jewelcase.js';
+import { CaseFactory } from './scene/jewelcase.js';
 import { LAYOUT_ORDER } from './scene/layouts.js';
 import { Stage } from './scene/stage.js';
 import { TextureStore } from './scene/textures.js';
@@ -62,7 +61,6 @@ async function boot() {
   factory.setCaseEnvironment(createCaseEnvironment(stage.renderer));
   const player = new Player({ transcoding: status.transcoding, volume: store.settings.volume });
   const carousel = new Carousel({ stage, store, textures, factory, player });
-  carousel.variantFor = (album) => resolveCase(album, store.settings).variant;
 
   // ---------- Aktionen ----------
   const actions = {
@@ -200,35 +198,6 @@ async function boot() {
       store.genre = '';
       store.setCompleteOnly(false);
       store.setCollection('all');
-    },
-    /** Hülle für das aktuelle Album festlegen ('auto' = automatisch). */
-    async setCase(variant) {
-      const album = store.current;
-      if (!album) return;
-      const prev = album.caseVariant ?? null;
-      const next = variant === 'auto' ? null : variant;
-      album.caseVariant = next; // sofort anzeigen, Server folgt
-      const d = store.cachedDetail(album.id);
-      if (d) d.caseVariant = next;
-      carousel.rebuild();
-      ui.renderCase(album, resolveCase(album, store.settings));
-      try {
-        await api.setCase(album.id, variant);
-        ui.toast(`Hülle: ${next ? VARIANTS[next].label : 'automatisch'}`, { ms: 1400 });
-      } catch (err) {
-        album.caseVariant = prev;
-        if (d) d.caseVariant = prev;
-        carousel.rebuild();
-        ui.renderCase(album, resolveCase(album, store.settings));
-        ui.toast(`Hülle nicht gespeichert: ${err.message}`, { kind: 'error' });
-      }
-    },
-    cycleCase() {
-      const album = store.current;
-      if (!album) return;
-      const order = ['auto', ...VARIANT_ORDER];
-      const cur = album.caseVariant ?? 'auto';
-      actions.setCase(order[(order.indexOf(cur) + 1) % order.length]);
     }
   };
 
@@ -271,10 +240,7 @@ async function boot() {
       carousel.setLayout(patch.layout);
       ui.setLayoutButtons(patch.layout);
     }
-    if ('spineDirection' in patch || 'tray' in patch || 'caseAuto' in patch || 'defaultCase' in patch) {
-      carousel.refreshAppearance();
-      if (store.mode === 'inspect' && store.current) ui.renderCase(store.current, resolveCase(store.current, store.settings));
-    }
+    if ('spineDirection' in patch || 'tray' in patch) carousel.refreshAppearance();
   });
 
   // ---------- Zustandswechsel ----------
@@ -303,7 +269,6 @@ async function boot() {
     ui.setAlbumColor(color);
     if (store.mode === 'inspect') {
       ui.renderPanel(album, store.cachedDetail(album.id));
-      ui.renderCase(album, resolveCase(album, store.settings));
       ui.setLidButton(carousel.lidAction());
       loadDetailFor(album);
     }
@@ -315,7 +280,6 @@ async function boot() {
     const album = store.current;
     if (mode === 'inspect' && album) {
       ui.renderPanel(album, store.cachedDetail(album.id));
-      ui.renderCase(album, resolveCase(album, store.settings));
       ui.showPanel(true);
       ui.setLidButton('Öffnen');
       loadDetailFor(album);

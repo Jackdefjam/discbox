@@ -122,10 +122,6 @@ export class Input {
       case 'B':
         if (inspect) actions.openBooklet();
         break;
-      case 'c':
-      case 'C':
-        if (inspect) actions.cycleCase();
-        break;
       case 's':
       case 'S':
         actions.toggleFavorite();

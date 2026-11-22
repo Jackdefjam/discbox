@@ -4,7 +4,6 @@ import { artUrl } from '../core/api.js';
 import { SHELF_GROUPS, SORTS } from '../core/store.js';
 import { fmtTime } from '../scene/artgen.js';
 import { LAYOUT_ORDER, LAYOUTS } from '../scene/layouts.js';
-import { VARIANTS } from '../scene/jewelcase.js';
 import { ICONS } from './icons.js';
 
 const esc = (s) =>
@@ -96,17 +95,6 @@ export class UI {
             <button class="btn ghost p-flip" title="Umdrehen (F)">${ICONS.flip}<span>Umdrehen</span></button>
             <button class="btn ghost p-booklet" title="Booklet & Scans (B)">${ICONS.booklet}<span>Booklet</span></button>
             <button class="btn ghost p-coveropts" title="Cover-Optionen">${ICONS.cloud}<span>Cover</span></button>
-          </div>
-          <div class="p-case">
-            <span class="p-case-label">Hülle</span>
-            <div class="seg case-seg">
-              <button class="seg-btn txt" data-case="auto" title="Automatisch wählen">Auto</button>
-              <button class="seg-btn txt" data-case="jewel" title="Jewel-Case">Jewel</button>
-              <button class="seg-btn txt" data-case="slim" title="Slim-Case">Slim</button>
-              <button class="seg-btn txt" data-case="double" title="Doppel-CD-Hülle">Doppel</button>
-              <button class="seg-btn txt" data-case="digipak" title="Digipak (Pappe)">Digipak</button>
-            </div>
-            <div class="p-case-hint"></div>
           </div>
           <div class="p-cover hidden">
             <div class="p-cover-status"></div>
@@ -315,7 +303,6 @@ export class UI {
     $(this.root, '.p-coveropts').addEventListener('click', () => el.pCover.classList.toggle('hidden'));
     $(this.root, '.p-online').addEventListener('click', () => actions.lookupOnline());
     $(this.root, '.p-mbid-go').addEventListener('click', () => actions.lookupOnline(el.pMbid.value.trim()));
-    for (const b of this.root.querySelectorAll('[data-case]')) b.addEventListener('click', () => actions.setCase(b.dataset.case));
     el.pTracks.addEventListener('click', (e) => {
       const li = e.target.closest('li[data-i]');
       if (li) actions.playTrack(Number(li.dataset.i));
@@ -577,20 +564,6 @@ export class UI {
     this.el.pCoverStatus.textContent = text;
   }
 
-  /** Hüllen-Auswahl im Panel; resolved = { variant, reason } der aktuellen Wahl. */
-  renderCase(album, resolved) {
-    const active = album.caseVariant ?? 'auto';
-    for (const b of this.root.querySelectorAll('[data-case]')) b.classList.toggle('active', b.dataset.case === active);
-    const label = VARIANTS[resolved.variant]?.label ?? resolved.variant;
-    const why = {
-      musicbrainz: `laut MusicBrainz: ${album.packaging}`,
-      discs: `${album.discs} CDs`,
-      default: 'Standard aus den Einstellungen'
-    }[resolved.reason];
-    this.root.querySelector('.p-case-hint').textContent =
-      resolved.reason === 'manual' ? `Festgelegt: ${label} · Taste C wechselt` : `Automatisch: ${label} (${why}) · Taste C wechselt`;
-  }
-
   setLidButton(label) {
     $(this.el.pLid, 'span').textContent = label;
   }
@@ -752,10 +725,6 @@ export class UI {
         <label class="row"><span>Schrift auf dem Rücken</span><select data-key="spineDirection">
           ${opt('down', 'von oben nach unten', s.spineDirection)}${opt('up', 'von unten nach oben', s.spineDirection)}
         </select></label>
-        ${check('caseAuto', 'Hülle automatisch wählen', 'Nach Verpackung laut MusicBrainz und Anzahl der CDs')}
-        <label class="row"><span>Standard-Hülle</span><select data-key="defaultCase">
-          ${opt('jewel', 'Jewel-Case', s.defaultCase)}${opt('slim', 'Slim-Case', s.defaultCase)}${opt('digipak', 'Digipak', s.defaultCase)}${opt('double', 'Doppel-CD', s.defaultCase)}
-        </select></label>
         <label class="row"><span>Tray (CD-Halter)</span><select data-key="tray">
           ${opt('black', 'Schwarz', s.tray)}${opt('clear', 'Klar', s.tray)}
         </select></label>
@@ -811,7 +780,6 @@ export class UI {
           ${row(['F'], 'Hülle umdrehen')}
           ${row(['O'], 'Hülle öffnen / schließen')}
           ${row(['B'], 'Booklet & Scans')}
-          ${row(['C'], 'Hülle wechseln (Jewel, Slim, Doppel, Digipak)')}
           ${row(['Esc'], 'Zurück')}
         </table></section>
         <section><h3>Wiedergabe</h3><table>

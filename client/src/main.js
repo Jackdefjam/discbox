@@ -108,6 +108,11 @@ async function boot() {
       const detail = store.cachedDetail(album.id);
       ui.openViewer(album, detail?.galleryNames ?? []);
     },
+    /** Regalwand: einen Boden höher (−1) oder tiefer (+1). */
+    shelfRow(dir) {
+      const j = carousel.rowNeighbor(store.index, dir);
+      if (j != null) store.select(j);
+    },
     randomAlbum() {
       const n = store.view.length;
       if (n < 2) return;
@@ -241,6 +246,7 @@ async function boot() {
   function applyTheme() {
     const theme = themes.find((t) => t.id === store.settings.theme) ?? themes[0];
     stage.applyTheme(theme);
+    carousel.applyTheme(theme);
     factory.setEdgeColor(theme.caseEdges ?? '#ffffff');
     applyThemeCss(theme);
   }

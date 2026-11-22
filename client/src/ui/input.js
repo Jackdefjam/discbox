@@ -64,9 +64,13 @@ export class Input {
       }
       case 'ArrowUp':
         if (inspect) ui.moveTrackFocus(-1);
+        else if (this.carousel?.isWall) this.actions.shelfRow(-1);
+        else handled = false;
         break;
       case 'ArrowDown':
         if (inspect) ui.moveTrackFocus(1);
+        else if (this.carousel?.isWall) this.actions.shelfRow(1);
+        else handled = false;
         break;
       case 'PageUp':
         store.step(-10, { jump: true });
@@ -320,6 +324,7 @@ export class Input {
     const fireY = (dir) => {
       if (ui.viewer || ui.modal) return;
       if (this.inspecting) ui.moveTrackFocus(dir);
+      else if (carousel?.isWall) actions.shelfRow(dir);
       else if (dir < 0) actions.inspect();
     };
     const repeat = (dir, key, fire) => {

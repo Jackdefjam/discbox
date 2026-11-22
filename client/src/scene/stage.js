@@ -194,8 +194,22 @@ export class Stage {
     this.#updateParticles();
   }
 
+  /** Spiegelboden vorübergehend aus (Regalwand: spart viel Rechenzeit). */
+  setReflectionSuppressed(on) {
+    if (this.reflectionSuppressed === on) return;
+    this.reflectionSuppressed = on;
+    this.#updateFloorMode();
+  }
+
+  /** Kamera fährt mit nach oben (Regalwand mit mehreren Böden). */
+  setLift(y) {
+    if (Math.abs((this.lift ?? 0) - y) < 1e-4) return;
+    this.lift = y;
+    this.#fitCamera(false);
+  }
+
   #updateFloorMode() {
-    const on = this.reflectionsWanted && this.quality.reflection > 0;
+    const on = this.reflectionsWanted && !this.reflectionSuppressed && this.quality.reflection > 0;
     this.reflector.visible = on;
     this.plainFloor.visible = !on;
     this.resize();
@@ -238,8 +252,9 @@ export class Stage {
     const dist = Math.hypot(px - tx, py - ty, pz - tz);
     const need = this.preset.fitWidth / 2 / Math.tan(fovH / 2);
     const k = Math.max(1, need / dist);
-    this.camPosGoal.set(tx + (px - tx) * k, ty + (py - ty) * k, tz + (pz - tz) * k);
-    this.camTargetGoal.set(tx, ty, tz);
+    const lift = this.lift ?? 0;
+    this.camPosGoal.set(tx + (px - tx) * k, ty + (py - ty) * k + lift, tz + (pz - tz) * k);
+    this.camTargetGoal.set(tx, ty + lift, tz);
     if (immediate) {
       this.camPos.copy(this.camPosGoal);
       this.camTarget.copy(this.camTargetGoal);

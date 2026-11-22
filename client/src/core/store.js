@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   tray: 'black',
   caseAuto: true,
   startView: 'favorites',
+  shelfGroup: 'genre',
   completeOnly: false,
   defaultCase: 'jewel',
   volume: 0.85,
@@ -59,6 +60,26 @@ export const SORTS = {
     cmp: (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0),
     letter: null
   }
+};
+
+/** Einteilungen der Regalwand: Schlüssel (für die Reihenfolge) und Beschriftung je Album. */
+export const SHELF_GROUPS = {
+  genre: {
+    label: 'Genre',
+    key: (a) => (a.genres?.[0] ? `a${a.genres[0].toLocaleLowerCase('de')}` : 'z'),
+    title: (a) => a.genres?.[0] ?? 'Ohne Genre'
+  },
+  decade: {
+    label: 'Jahrzehnt',
+    key: (a) => (a.year ? `a${Math.floor(a.year / 10) * 10}` : 'z'),
+    title: (a) => (a.year ? `${Math.floor(a.year / 10) * 10}er` : 'Ohne Jahr')
+  },
+  letter: {
+    label: 'Künstler A–Z',
+    key: (a) => (letterOf(a._sa) === '#' ? 'z' : `a${letterOf(a._sa)}`),
+    title: (a) => letterOf(a._sa)
+  },
+  none: { label: 'Ohne Einteilung', key: () => 'a', title: () => 'Alle Alben' }
 };
 
 export const isComplete = (a) => !!(a.art?.front && a.art?.back);
@@ -179,7 +200,21 @@ export class Store extends Emitter {
     if (terms.length) list = list.filter((a) => terms.every((t) => a._search.includes(t)));
     if (this.genre) list = list.filter((a) => a.genres?.includes(this.genre));
     const sort = SORTS[this.settings.sort] ?? SORTS.artist;
-    this.view = [...list].sort(sort.cmp);
+    const group = this.shelfGrouping;
+    if (group) {
+      // Regalwand: erst nach Abschnitt (Genre, Jahrzehnt …), darin nach der gewählten Sortierung
+      for (const a of list) a._g = group.key(a);
+      this.view = [...list].sort((a, b) => collator.compare(a._g, b._g) || sort.cmp(a, b));
+      this.groups = [];
+      this.view.forEach((a, i) => {
+        const last = this.groups[this.groups.length - 1];
+        if (last && last.key === a._g) last.end = i;
+        else this.groups.push({ key: a._g, title: group.title(a), start: i, end: i });
+      });
+    } else {
+      this.view = [...list].sort(sort.cmp);
+      this.groups = null;
+    }
     const idx = keepId ? this.view.findIndex((a) => a.id === keepId) : -1;
     this.index = idx >= 0 ? idx : Math.min(this.index, Math.max(0, this.view.length - 1));
     if (!this.view.length) this.index = 0;
@@ -187,8 +222,27 @@ export class Store extends Emitter {
     this.emit('index', this.index, { jump: true });
   }
 
-  /** Buchstaben-Leiste: erster Index je Buchstabe. */
+  /** Aktive Einteilung der Regalwand (nur in der Anordnung „Regal“). */
+  get shelfGrouping() {
+    if (this.settings.layout !== 'shelf') return null;
+    return SHELF_GROUPS[this.settings.shelfGroup] ?? SHELF_GROUPS.genre;
+  }
+
+  groupIndexOf(i) {
+    if (!this.groups) return -1;
+    let lo = 0;
+    let hi = this.groups.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.groups[mid].start <= i) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  /** Buchstaben-Leiste: erster Index je Buchstabe (bei der Regalwand: je Abschnitt). */
   letters() {
+    if (this.groups) return this.groups.map((g) => ({ letter: g.title, index: g.start }));
     const sort = SORTS[this.settings.sort];
     if (!sort?.letter) return [];
     const map = new Map();
@@ -200,6 +254,7 @@ export class Store extends Emitter {
   }
 
   letterAt(i) {
+    if (this.groups) return this.groups[this.groupIndexOf(i)]?.title ?? null;
     const sort = SORTS[this.settings.sort];
     return sort?.letter && this.view[i] ? letterOf(sort.letter(this.view[i])) : null;
   }
@@ -251,9 +306,11 @@ export class Store extends Emitter {
   }
 
   updateSettings(patch) {
+    const regroup = ('layout' in patch && patch.layout !== this.settings.layout) || ('shelfGroup' in patch && patch.shelfGroup !== this.settings.shelfGroup);
     Object.assign(this.settings, patch);
     this.#persistSoon();
     this.emit('settings', patch);
+    if (regroup && this.all.length) this.#rebuild(this.current?.id);
   }
 
   #persistSoon() {

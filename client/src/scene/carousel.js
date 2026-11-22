@@ -7,6 +7,7 @@ import { drawBack, drawDisc, drawFrontPlaceholder, drawInlay, drawSpine } from '
 import { albumHashColor } from './color.js';
 import { CASE, CASE_D, CASE_H, CASE_W, JewelCase, variantDepth } from './jewelcase.js';
 import { LAYOUTS } from './layouts.js';
+import { BOARD_W, MARGIN, ROW_H, ShelfWall } from './shelfwall.js';
 
 const SHELF_GAP = 0.008;
 
@@ -335,7 +336,13 @@ export class Carousel {
     this.centers = new Float64Array(0);
     this.thick = new Float64Array(0);
     this.poseInfo = { base: 0, selThick: CASE.D * 0.01 };
+    /** Regalwand: Boden je Index, Lage auf dem Boden und Höhe des Bodens. */
+    this.wallMap = null;
+    this.wallCam = { x: 0, y: 0, view: 0, valid: false };
+    this.wall = new ShelfWall(this.scene);
+    this.ranges = [];
     stage.setCameraPreset(this.layout.camera, true);
+    this.#applyLayoutStage();
   }
 
   cachedDetail(id) {
@@ -355,6 +362,47 @@ export class Carousel {
   setLayout(id) {
     this.layout = LAYOUTS[id] ?? LAYOUTS.coverflow;
     this.stage.setCameraPreset(this.layout.camera);
+    this.#computeShelf();
+    this.#applyLayoutStage();
+  }
+
+  applyTheme(theme) {
+    this.wall.applyTheme(theme);
+  }
+
+  #applyLayoutStage() {
+    const wall = this.layout.id === 'shelf';
+    this.stage.setReflectionSuppressed(wall);
+    if (!wall) {
+      this.stage.setLift(0);
+      this.wall.hide();
+    }
+  }
+
+  /** Ist die Regalwand mit mehreren Böden aktiv? */
+  get isWall() {
+    return !!this.wallMap;
+  }
+
+  /** Index im Boden darüber (dir −1) oder darunter (dir +1), möglichst an gleicher Stelle. */
+  rowNeighbor(index, dir) {
+    const m = this.wallMap;
+    if (!m) return null;
+    const r = m.row[index] + dir;
+    if (r < 0 || r >= m.rows.length) return null;
+    const { start, end } = m.rows[r];
+    const x = m.x[index];
+    let best = start;
+    for (let i = start; i <= end; i++) if (Math.abs(m.x[i] - x) < Math.abs(m.x[best] - x)) best = i;
+    return best;
+  }
+
+  /** Abschnitt (Genre, Jahrzehnt …) des Bodens, auf dem die Hülle steht. */
+  rowInfo(index) {
+    const m = this.wallMap;
+    if (!m) return null;
+    const r = m.rows[m.row[index]];
+    return r ? { title: r.title, position: index - r.groupStart + 1, count: r.count } : null;
   }
 
   setQualityFlags({ edges, lowWindow }) {
@@ -382,6 +430,79 @@ export class Carousel {
       this.centers[i] = x + t / 2;
       x += t + SHELF_GAP;
     }
+    this.#computeWall();
+  }
+
+  /** Verteilt die Abschnitte auf Böden: jeder Abschnitt beginnt auf einem neuen Boden, lange laufen weiter. */
+  #computeWall() {
+    const groups = this.store.groups;
+    const n = this.store.view.length;
+    if (this.layout.id !== 'shelf' || !groups?.length || !n) {
+      this.wallMap = null;
+      return;
+    }
+    const row = new Int32Array(n);
+    const x = new Float64Array(n);
+    const rows = [];
+    for (const g of groups) {
+      let cur = null;
+      let cx = 0;
+      for (let i = g.start; i <= g.end && i < n; i++) {
+        const t = this.thick[i];
+        if (!cur || cx + t > BOARD_W) {
+          cur = { title: g.title, count: g.end - g.start + 1, cont: !!cur, start: i, end: i, groupStart: g.start };
+          rows.push(cur);
+          cx = 0;
+        }
+        row[i] = rows.length - 1;
+        x[i] = cx + t / 2;
+        cx += t + SHELF_GAP;
+        cur.end = i;
+      }
+    }
+    const top = rows.length - 1;
+    const y = new Float64Array(n);
+    for (let i = 0; i < n; i++) y[i] = (top - row[i]) * ROW_H + 0.05;
+    rows.forEach((r, k) => (r.y = (top - k) * ROW_H + 0.05));
+    this.wallMap = { row, x, y, rows };
+  }
+
+  /** Welche Indizes gebunden werden: Bereiche [lo, hi]. */
+  #computeRanges() {
+    const n = this.store.view.length;
+    const ranges = this.ranges;
+    ranges.length = 0;
+    const m = this.wallMap;
+    if (!m) {
+      const W = this.windowSize();
+      if (n) ranges.push([Math.max(0, Math.floor(this.pos) - W), Math.min(n - 1, Math.ceil(this.pos) + W)]);
+      return ranges;
+    }
+    // Sichtbarer Bereich der Wand aus Kamera-Öffnungswinkel und Abstand
+    const cam = this.stage.camera;
+    const dist = Math.max(2, cam.position.z + 0.35);
+    const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    const halfW = Math.min(this.lowWindow ? 2.6 : 4.2, tanV * cam.aspect * dist + 0.4);
+    const halfH = tanV * dist + 0.3;
+    const xs = this.wallCam.view;
+    const ys = this.wallCam.y;
+    for (let r = 0; r < m.rows.length; r++) {
+      const row = m.rows[r];
+      if (row.y > ys + halfH || row.y + ROW_H < ys - halfH) continue;
+      let lo = -1;
+      let hi = -1;
+      for (let i = row.start; i <= row.end; i++) {
+        if (Math.abs(m.x[i] - xs) <= halfW) {
+          if (lo < 0) lo = i;
+          hi = i;
+        }
+      }
+      if (lo >= 0) ranges.push([lo, hi]);
+    }
+    // Ausgewählte Hülle immer binden (auch wenn sie gerade außerhalb liegt)
+    const sel = this.store.index;
+    if (sel >= 0 && sel < n && !ranges.some(([a, b]) => sel >= a && sel <= b)) ranges.push([sel, sel]);
+    return ranges;
   }
 
   #interp(arr, pos) {
@@ -415,6 +536,13 @@ export class Carousel {
   setIndex(i, { jump = false, fromDrag = false } = {}) {
     this.target = i;
     if (fromDrag) return;
+    const m = this.wallMap;
+    if (m && i < m.row.length) {
+      // Regalwand: bei Bodenwechsel nur den letzten Schritt animieren, die Kamera gleitet hin
+      const cur = m.row[Math.max(0, Math.min(m.row.length - 1, Math.round(this.pos)))];
+      if (m.row[i] !== cur || Math.abs(i - this.pos) > 30) this.pos = i - Math.sign(i - this.pos || 1) * 0.9;
+      return;
+    }
     const W = this.windowSize();
     if (jump && Math.abs(i - this.pos) > W) this.pos = i - Math.sign(i - this.pos) * W * 0.6;
     else if (Math.abs(i - this.pos) > 40) this.pos = i - Math.sign(i - this.pos) * 12;
@@ -540,23 +668,68 @@ export class Carousel {
       if (Math.abs(this.pos - this.target) < 0.0005) this.pos = this.target;
     }
 
+    // Regalwand: Kameraposition (seitlich und Höhe) gleitet getrennt vom Index, damit Bodenwechsel weich sind
+    const m = this.wallMap;
+    if (m && n) {
+      const gx = this.#interp(m.x, this.pos);
+      const gy = this.#interp(m.y, this.pos);
+      const wc = this.wallCam;
+      if (!wc.valid) Object.assign(wc, { x: gx, y: gy, valid: true });
+      const rate = reduceMotion ? 30 : 7;
+      wc.x = damp(wc.x, gx, rate, dt);
+      wc.y = damp(wc.y, gy, rate, dt);
+      // Kamera nicht über das Regalende hinaus schwenken (sonst halb leeres Bild)
+      const cam = this.stage.camera;
+      const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      // Maßgeblich ist die Vorderkante der Böden (näher an der Kamera als die Hüllen)
+      const half = tanV * cam.aspect * Math.max(2, cam.position.z - 0.55);
+      const minX = half - MARGIN - 0.15;
+      const maxX = BOARD_W + MARGIN + 0.15 - half;
+      wc.view = minX > maxX ? BOARD_W / 2 : Math.max(minX, Math.min(maxX, wc.x));
+    } else this.wallCam.valid = false;
+
     // Sichtfenster binden
     const W = this.windowSize();
-    const lo = Math.max(0, Math.floor(this.pos) - W);
-    const hi = Math.min(n - 1, Math.ceil(this.pos) + W);
+    const ranges = this.#computeRanges();
+    const inRange = (i) => ranges.some(([a, b]) => i >= a && i <= b);
     for (const [i, slot] of this.bound) {
-      if (i < lo || i > hi || view[i] !== slot.album) {
+      if (!inRange(i) || view[i] !== slot.album) {
         slot.unbind();
         this.bound.delete(i);
         this.free.push(slot);
       }
     }
-    for (let i = lo; i <= hi; i++) {
-      if (this.bound.has(i)) continue;
-      const slot = this.free.pop() ?? this.#newSlot();
-      slot.bind(view[i], i);
-      this.bound.set(i, slot);
-      if (i === this.store.index) this.onSlotColor(slot);
+    for (const [lo, hi] of ranges) {
+      for (let i = lo; i <= hi; i++) {
+        if (this.bound.has(i)) continue;
+        const slot = this.free.pop() ?? this.#newSlot();
+        slot.bind(view[i], i);
+        this.bound.set(i, slot);
+        if (i === this.store.index) this.onSlotColor(slot);
+      }
+    }
+
+    // Regalwand: Kamera fährt zum Boden der Auswahl, Böden und Schilder mitführen
+    let wallX = 0;
+    let wallShift = 0;
+    let selRow = -1;
+    if (m && n) {
+      wallX = this.wallCam.view;
+      const half = CASE_W / 2 + 0.04;
+      const xs = this.wallCam.x;
+      wallShift = Math.max(-MARGIN + half, Math.min(BOARD_W + MARGIN - half, xs)) - xs;
+      selRow = m.row[Math.max(0, Math.min(n - 1, Math.round(this.pos)))];
+      this.stage.setLift(this.wallCam.y - 0.05);
+      const rowsVis = [];
+      let topIdx = -1;
+      for (let r = Math.max(0, selRow - 2); r <= Math.min(m.rows.length - 1, selRow + 2); r++) {
+        if (r === 0) topIdx = rowsVis.length;
+        rowsVis.push(m.rows[r]);
+      }
+      this.wall.update(rowsVis, -wallX, topIdx);
+    } else if (this.layout.id === 'shelf') {
+      this.wall.hide();
+      this.stage.setLift(0);
     }
 
     const inspectIndex = this.store.mode === 'inspect' ? this.store.index : -1;
@@ -579,10 +752,30 @@ export class Carousel {
         s.bind(s.album, i);
         Object.assign(s, keep);
       }
-      const d = i - this.pos;
+      let d = i - this.pos;
       s.case.setFavorite(s.album.favorite);
-      info.base = (this.centers[i] ?? 0) - posCenter;
-      this.layout.pose(d, pose, info);
+      if (m) {
+        info.base = m.x[i] - wallX;
+        if (m.row[i] === selRow) {
+          this.layout.pose(d, pose, info);
+          // Herausgezogene Hülle bleibt innerhalb des Regals; die Nachbarn rücken mit
+          if (wallShift) {
+            const t = Math.min(Math.abs(d), 1);
+            const e = t * t * (3 - 2 * t);
+            pose.x += wallShift * (Math.sign(d) === Math.sign(wallShift) || d === 0 ? 1 : 1 - e);
+          }
+        } else {
+          // Anderer Boden: Hülle steht einfach an ihrem Platz, keine Lücke
+          pose.x = info.base;
+          pose.z = -0.35;
+          pose.yaw = Math.PI / 2;
+          d = Math.sign(d) * Math.max(Math.abs(d), 3 + Math.abs(info.base) / CASE_D);
+        }
+        pose.y = m.y[i];
+      } else {
+        info.base = (this.centers[i] ?? 0) - posCenter;
+        this.layout.pose(d, pose, info);
+      }
       if (this.ib > 0.001 && i !== inspectIndex) {
         pose.x += Math.sign(d) * this.ib * 0.55;
         pose.z -= this.ib * 1.1;
@@ -616,11 +809,13 @@ export class Carousel {
       s.body.quaternion.copy(qA);
 
       // Bodenschatten
-      s.shadow.position.set(vA.x, 0.003, vA.z);
+      s.shadow.position.set(vA.x, (m ? m.y[i] : 0) + 0.003, vA.z);
       eul.setFromQuaternion(qA, 'YXZ');
       s.shadow.rotation.set(-Math.PI / 2, eul.y, 0, 'YXZ');
       s.shadow.scale.set(CASE_W * 1.25, (variantDepth(s.variant) + 0.05) * 6, 1);
-      s.shadow.material.opacity = 0.7 * (1 - s.e) * Math.max(0, 1 - Math.abs(d) / (W + 1));
+      s.shadow.material.opacity = m
+        ? 0.5 * (1 - s.e)
+        : 0.7 * (1 - s.e) * Math.max(0, 1 - Math.abs(d) / (W + 1));
 
       // CD dreht sich, wenn dieses Album läuft
       if (s.lid > 0.05 && playingAlbum && s.album.id === playingAlbum) {

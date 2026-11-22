@@ -31,7 +31,8 @@ export const LAYOUTS = {
     label: 'Regal',
     window: 28,
     lowWindow: 16,
-    camera: { pos: [0, 0.92, 5.1], target: [0, 0.6, 0], fitWidth: 3.2 },
+    // Etwas weiter weg als bei den anderen Anordnungen: man sieht mehrere Böden der Regalwand
+    camera: { pos: [0, 1.0, 6.3], target: [0, 0.66, 0], fitWidth: 4.3 },
     // info.base: Abstand der Rückenmitten (Hüllen sind je nach Verpackung unterschiedlich dick)
     pose(d, out, info) {
       const a = Math.abs(d);

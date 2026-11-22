@@ -13,7 +13,7 @@
 ## Was discbox kann
 
 - **Vier Hüllenarten in Originalmaßen:** Jewel-Case (142 × 125 × 10,4 mm), Slim-Case (5,2 mm), Doppel-CD-Hülle (22 mm, mit Klapp-Tray) und Digipak (Pappe). Mit Frontcover, Rückseite samt CD-Rücken, Tray, aufklappbarem Deckel, bedruckter CD und Booklet-Innenseite. Die passende Hülle wird automatisch gewählt und lässt sich pro Album ändern.
-- **Drei Anordnungen:** Coverflow, Regal (Rücken an Rücken wie im CD-Regal) und Rad.
+- **Drei Anordnungen:** Coverflow, Regalwand (mehrere Böden übereinander, nach Genre, Jahrzehnt oder Künstler einsortiert, Rücken an Rücken wie im CD-Regal) und Rad.
 - **Fünf Themes** (Studio, Neon Arcade, Wohnzimmer, Mitternacht, Galerie hell) plus eigene Themes als JSON-Datei. Der Hintergrund färbt sich passend zum gewählten Album.
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
 - **Favoriten** mit eigener Ansicht (Start-Ansicht), goldenem Aufkleber auf der Hülle und dem Filter **„Nur komplette Cover“**: zeigt nur Alben, bei denen Front- *und* Rückseite vorhanden sind. Alle diese Alben lassen sich mit einem Klick zu Favoriten machen.
@@ -92,6 +92,19 @@ docker compose -f docker-compose.build.yml up -d --build
 
 Favoriten werden auf dem Server gespeichert (`overrides.json` im Daten-Ordner). Sie gelten auf allen Geräten und überstehen jeden Scan.
 
+## Regalwand
+
+In der Anordnung **Regal** stehen die Alben auf mehreren Böden übereinander. Jeder Abschnitt beginnt auf einem eigenen Boden mit Schild; lange Abschnitte laufen auf dem nächsten Boden weiter („Forts.“).
+
+![Regalwand nach Genre](docs/regalwand.jpg)
+
+- **Einteilung:** Einstellungen → *Darstellung → Regal einteilen nach*: **Genre** (Standard), **Jahrzehnt**, **Künstler A–Z** oder **ohne Einteilung**. Alben ohne Genre bzw. ohne Jahr landen auf den untersten Böden.
+- **Innerhalb eines Bodens** gilt die oben gewählte Sortierung (Künstler, Titel, Jahr …).
+- **Bedienung:** ← → blättert auf dem Boden (und am Ende weiter auf den nächsten), **↑ ↓** wechselt den Boden – die Kamera fährt mit. Am Controller dasselbe mit Steuerkreuz oder Stick.
+- **Schnellsprung:** Die Leiste am rechten Rand zeigt die Abschnitte (statt A–Z) und springt per Klick zum jeweiligen Boden. Unter dem Albumtitel steht, in welchem Abschnitt und an welcher Stelle das Album steht.
+
+Coverflow und Rad bleiben eine durchgehende Reihe ohne Einteilung.
+
 ## Hüllenarten
 
 ![Hüllenarten](docs/huellen.jpg)
@@ -148,8 +161,8 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
-| **Gamepad** | Steuerkreuz/Stick blättern, A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
+| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, C Hülle wechseln, B Booklet, Esc zurück |
+| **Gamepad** | Steuerkreuz/Stick blättern (im Regal hoch/runter: Boden wechseln), A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.
 

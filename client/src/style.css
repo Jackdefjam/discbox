@@ -475,6 +475,26 @@ body.inspecting .rail {
   background: var(--accent);
 }
 
+/* Regalwand: Abschnitte statt Buchstaben */
+.rail.groups {
+  align-items: flex-end;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.rail.groups button {
+  width: auto;
+  max-width: 150px;
+  padding: 0 9px;
+  height: 22px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
 /* Favoriten */
 .views .seg-btn svg {
   width: 15px;

@@ -1,7 +1,7 @@
 // Bedienoberfläche über der 3D-Szene.
 
 import { artUrl } from '../core/api.js';
-import { SORTS } from '../core/store.js';
+import { SHELF_GROUPS, SORTS } from '../core/store.js';
 import { fmtTime } from '../scene/artgen.js';
 import { LAYOUT_ORDER, LAYOUTS } from '../scene/layouts.js';
 import { VARIANTS } from '../scene/jewelcase.js';
@@ -466,7 +466,10 @@ export class UI {
     el.capTitle.textContent = album.title;
     const meta = [album.year, album.genres?.[0], `${album.trackCount} Titel`, fmtLong(album.duration), album.format].filter(Boolean);
     el.capMeta.textContent = meta.join('  ·  ');
-    el.capCount.textContent = `${this.store.index + 1} / ${this.store.view.length}${this.store.collection === 'favorites' ? ' Favoriten' : ''}`;
+    const g = this.store.groups?.[this.store.groupIndexOf(this.store.index)];
+    el.capCount.textContent = g
+      ? `${g.title}  ·  ${this.store.index - g.start + 1} / ${g.end - g.start + 1}`
+      : `${this.store.index + 1} / ${this.store.view.length}${this.store.collection === 'favorites' ? ' Favoriten' : ''}`;
     this.renderFavorite(album);
     el.caption.classList.remove('swap');
     void el.caption.offsetWidth;
@@ -476,15 +479,16 @@ export class UI {
 
   renderRail() {
     const letters = this.store.letters();
-    this.el.rail.innerHTML = letters.map((l) => `<button data-i="${l.index}">${l.letter}</button>`).join('');
-    this.el.rail.classList.toggle('hidden', letters.length < 3);
+    this.el.rail.innerHTML = letters.map((l) => `<button data-i="${l.index}" title="${esc(l.letter)}">${esc(l.letter)}</button>`).join('');
+    this.el.rail.classList.toggle('groups', !!this.store.groups && this.store.settings.shelfGroup !== 'letter');
+    this.el.rail.classList.toggle('hidden', letters.length < (this.store.groups ? 2 : 3));
     for (const b of this.el.rail.children) b.addEventListener('click', () => this.store.select(Number(b.dataset.i), { jump: true }));
     this.highlightRail();
   }
 
   highlightRail() {
     const cur = this.store.letterAt(this.store.index);
-    for (const b of this.el.rail.children) b.classList.toggle('active', b.textContent === cur);
+    for (const b of this.el.rail.children) b.classList.toggle('active', b.title === cur);
   }
 
   renderGenres() {
@@ -724,6 +728,7 @@ export class UI {
       <section><h3>Darstellung</h3>
         <label class="row"><span>Theme</span><select data-key="theme">${this.themes.map((t) => opt(t.id, esc(t.name), s.theme)).join('')}</select></label>
         <label class="row"><span>Anordnung</span><select data-key="layout">${LAYOUT_ORDER.map((id) => opt(id, LAYOUTS[id].label, s.layout)).join('')}</select></label>
+        <label class="row"><span>Regal einteilen nach<small>Ein Boden je Abschnitt, ↑/↓ wechselt den Boden</small></span><select data-key="shelfGroup">${Object.entries(SHELF_GROUPS).map(([id, g]) => opt(id, g.label, s.shelfGroup)).join('')}</select></label>
         <label class="row"><span>Qualität</span><select data-key="quality">
           ${opt('auto', 'Automatisch', s.quality)}${opt('high', 'Hoch', s.quality)}${opt('medium', 'Mittel', s.quality)}${opt('low', 'Niedrig (schwache Geräte, TV)', s.quality)}
         </select></label>
@@ -788,6 +793,7 @@ export class UI {
         <section><h3>Tastatur – Sammlung</h3><table>
           ${row(['←', '→'], 'Album wechseln')}
           ${row(['Bild ↑', 'Bild ↓'], '10 Alben springen')}
+          ${row(['↑', '↓'], 'Regal: Boden höher / tiefer')}
           ${row(['Pos1', 'Ende'], 'Anfang / Ende')}
           ${row(['Enter'], 'Album herausnehmen und ansehen')}
           ${row(['P'], 'Album abspielen')}

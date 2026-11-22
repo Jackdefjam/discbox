@@ -16,6 +16,7 @@
 - **Drei Anordnungen:** Coverflow, Regalwand (mehrere Böden übereinander, nach Genre, Jahrzehnt oder Künstler einsortiert, Rücken an Rücken wie im CD-Regal) und Rad.
 - **Fünf Themes** (Studio, Neon Arcade, Wohnzimmer, Mitternacht, Galerie hell) plus eigene Themes als JSON-Datei. Der Hintergrund färbt sich passend zum gewählten Album.
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
+- **Plattenspieler beim Abspielen:** Der Teller dreht sich mit der CD oder einer Schallplatte, der Tonarm folgt dem Album. Per Klick groß, mit der geöffneten Hülle daneben.
 - **Favoriten** mit eigener Ansicht (Start-Ansicht), goldenem Aufkleber auf der Hülle und dem Filter **„Nur komplette Cover“**: zeigt nur Alben, bei denen Front- *und* Rückseite vorhanden sind. Alle diese Alben lassen sich mit einem Klick zu Favoriten machen.
 - **Booklet-Ansicht** für alle Scans im Albumordner (auch im Unterordner `Scans/`, `Artwork/` …).
 - **Abspielen im Browser:** Warteschlange, Zufall, Wiederholen, Spulen, Medientasten. Der nächste Titel wird vorgeladen. MP3, FLAC, AAC, Opus, Vorbis und WAV laufen direkt; **WMA, ALAC, APE, WavPack, DSD & Co. wandelt der Server mit ffmpeg um** (Spulen funktioniert auch dann).
@@ -92,6 +93,22 @@ docker compose -f docker-compose.build.yml up -d --build
 
 Favoriten werden auf dem Server gespeichert (`overrides.json` im Daten-Ordner). Sie gelten auf allen Geräten und überstehen jeden Scan.
 
+## Plattenspieler
+
+Sobald ein Album läuft, erscheint unten links ein kleiner Plattenspieler (auf dem Handy oben rechts). Der Teller dreht sich mit 33⅓ Umdrehungen, und der Tonarm folgt dem Fortschritt im Album: Er setzt außen auf und wandert Titel für Titel nach innen. Bei Pause hebt er ab und der Teller läuft aus. Wenn die Wiedergabe endet, fährt der Arm zurück in die Stütze.
+
+![Plattenspieler mit Schallplatte](docs/plattenspieler-vinyl.jpg)
+
+| Mit der CD auf dem Teller | Kleines Bild beim Blättern |
+| --- | --- |
+| ![Plattenspieler mit CD](docs/plattenspieler-cd.jpg) | ![Kleiner Plattenspieler](docs/plattenspieler-klein.jpg) |
+
+- **Groß anzeigen:** Klick auf den kleinen Plattenspieler, das Symbol in der Player-Leiste oder Taste **D**. Ziehen dreht die Ansicht, das Mausrad zoomt. **Esc** führt zurück. Neben dem Plattenspieler liegt die geöffnete Hülle des Albums.
+- **CD oder Schallplatte:** In den Einstellungen unter *Plattenspieler → Auf dem Teller*.
+  - **CD:** Die CD des Albums liegt auf dem Teller, das Fach der Hülle ist dann leer, auch im Karussell.
+  - **Schallplatte:** Eine Platte mit dem Cover als Label. Die Pausen zwischen den Titeln sind als glatte Ringe in den Rillen zu sehen, ihre Abstände richten sich nach den Titellängen.
+- **Ausblenden:** *Einstellungen → Plattenspieler → Plattenspieler beim Abspielen zeigen*. Über die Player-Leiste lässt er sich trotzdem jederzeit groß öffnen.
+
 ## Regalwand
 
 In der Anordnung **Regal** stehen die Alben auf mehreren Böden übereinander. Jeder Abschnitt beginnt auf einem eigenen Boden mit Schild; lange Abschnitte laufen auf dem nächsten Boden weiter („Forts.“).
@@ -153,8 +170,8 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, B Booklet, Esc zurück |
-| **Gamepad** | Steuerkreuz/Stick blättern (im Regal hoch/runter: Boden wechseln), A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
+| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, D Plattenspieler, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, B Booklet, Esc zurück |
+| **Gamepad** | Steuerkreuz/Stick blättern (im Regal hoch/runter: Boden wechseln), A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen, linken Stick drücken: Plattenspieler | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.
 

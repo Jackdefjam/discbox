@@ -786,6 +786,65 @@ body.inspecting .filter-empty {
   user-select: text;
 }
 
+/* Plattenspieler: Klickfläche über dem kleinen Bild und große Ansicht */
+.deck-pip {
+  position: absolute;
+  z-index: 6;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 18px;
+  cursor: zoom-in;
+  transition: background 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.deck-pip:hover,
+.deck-pip:focus-visible {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
+}
+/* Die Abdunklung am unteren Rand lässt den Plattenspieler frei */
+body.deck-on .shade {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent var(--deck-edge, 0px), #000 calc(var(--deck-edge, 0px) + 160px));
+  mask-image: linear-gradient(to right, transparent 0, transparent var(--deck-edge, 0px), #000 calc(var(--deck-edge, 0px) + 160px));
+}
+.deck-view {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  cursor: grab;
+  touch-action: none;
+}
+.deck-view:active {
+  cursor: grabbing;
+}
+.deck-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 18px;
+}
+.deck-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--player-h) + 16px);
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+body.deck-open .topbar,
+body.deck-open .caption,
+body.deck-open .rail,
+body.deck-open .panel,
+body.deck-open .shade,
+body.deck-open .filter-empty {
+  opacity: 0;
+  pointer-events: none;
+}
+.np-deck.active {
+  color: var(--accent);
+}
+
 /* Player-Leiste */
 .player {
   position: absolute;

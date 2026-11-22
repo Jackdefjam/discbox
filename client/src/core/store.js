@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS = {
   tray: 'black',
   startView: 'favorites',
   shelfGroup: 'genre',
+  deck: true,
+  deckDisc: 'cd',
   completeOnly: false,
   volume: 0.85,
   lastAlbumId: null

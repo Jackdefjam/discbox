@@ -58,7 +58,8 @@ function spineFraction(entry) {
   return spineMM / (CASE.BACK_W + 2 * spineMM);
 }
 
-class Slot {
+/** Eine Hülle mit gebundenem Album (wird auch vom Plattenspieler für die geöffnete Hülle genutzt). */
+export class Slot {
   constructor(carousel) {
     this.c = carousel;
     this.case = new JewelCase(carousel.factory);
@@ -299,6 +300,8 @@ export class Carousel {
     this.panel = { side: 'right', frac: 0 };
     this.raycaster = new THREE.Raycaster();
     this.onColor = () => {};
+    /** Liegt die CD dieses Albums gerade woanders (auf dem Plattenspieler)? Wird von main.js gesetzt. */
+    this.discAway = () => false;
     this.centers = new Float64Array(0);
     this.thick = new Float64Array(0);
     this.poseInfo = { base: 0, selThick: CASE.D * 0.01 };
@@ -764,8 +767,10 @@ export class Carousel {
         ? 0.5 * (1 - s.e)
         : 0.7 * (1 - s.e) * Math.max(0, 1 - Math.abs(d) / (W + 1));
 
-      // CD dreht sich, wenn dieses Album läuft
-      if (s.lid > 0.05 && playingAlbum && s.album.id === playingAlbum) {
+      // Liegt die CD auf dem Plattenspieler, ist das Fach leer; sonst dreht sie sich, wenn das Album läuft
+      const away = this.discAway(s.album.id);
+      s.case.discGroup.visible = !away;
+      if (!away && s.lid > 0.05 && playingAlbum && s.album.id === playingAlbum) {
         s.spin += dt * 4.2;
         for (const disc of s.case.discs) disc.rotation.z = -s.spin;
       }

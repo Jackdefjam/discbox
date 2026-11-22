@@ -9,6 +9,7 @@ import { Store } from './core/store.js';
 import { applyThemeCss, buildThemeList } from './core/themes.js';
 import { Carousel } from './scene/carousel.js';
 import { albumHashColor } from './scene/color.js';
+import { Deck } from './scene/deck.js';
 import { createCaseEnvironment } from './scene/environment.js';
 import { CaseFactory } from './scene/jewelcase.js';
 import { LAYOUT_ORDER } from './scene/layouts.js';
@@ -61,6 +62,9 @@ async function boot() {
   factory.setCaseEnvironment(createCaseEnvironment(stage.renderer));
   const player = new Player({ transcoding: status.transcoding, volume: store.settings.volume });
   const carousel = new Carousel({ stage, store, textures, factory, player });
+  // Plattenspieler beim Abspielen (eigene kleine Szene, per Klick groß)
+  const deck = new Deck({ stage, factory, textures, store, player });
+  carousel.discAway = (id) => deck.holdsCd(id);
 
   // ---------- Aktionen ----------
   const actions = {
@@ -95,6 +99,24 @@ async function boot() {
     },
     flip() {
       carousel.flip();
+    },
+    openDeck() {
+      if (!player.current) return ui.toast('Erst ein Album abspielen – dann legt discbox es auf den Plattenspieler.');
+      if (store.settings.deck === false) store.updateSettings({ deck: true });
+      deck.open();
+    },
+    closeDeck() {
+      deck.close();
+    },
+    toggleDeck() {
+      if (deck.isOpen) deck.close();
+      else actions.openDeck();
+    },
+    deckOrbit(dx, dy) {
+      deck.orbit(dx, dy);
+    },
+    deckZoom(delta) {
+      deck.zoom(delta);
     },
     toggleLid() {
       carousel.toggleLid();
@@ -202,6 +224,10 @@ async function boot() {
   };
 
   const ui = new UI({ root, store, player, actions, themes });
+  deck.playerHeight = () => ui.playerOffset();
+  deck.topHeight = () => ui.topOffset();
+  deck.onRect = (rect, vis, full) => ui.placeDeckPip(rect, vis, full);
+  deck.onFullChange = (open) => ui.showDeckView(open);
 
   // ---------- Einstellungen anwenden ----------
   let autoQuality = { level: 'medium', samples: [], changes: 0 };
@@ -403,7 +429,9 @@ async function boot() {
 
     carousel.update(dt, time, { reduceMotion });
     stage.update(dt, time, { reduceMotion });
-    stage.render();
+    deck.update(dt, time, { reduceMotion });
+    if (!deck.coversScreen) stage.render();
+    deck.render();
     ui.tick();
 
     // Automatische Qualität: langsam → herunterschalten, sehr schnell → hochschalten
@@ -433,7 +461,7 @@ async function boot() {
   document.body.classList.add('ready');
 
   // Für Fehlersuche in der Browser-Konsole
-  window.discbox = { store, stage, carousel, player, textures, ui };
+  window.discbox = { store, stage, carousel, player, textures, ui, deck };
 }
 
 boot().catch((err) => {

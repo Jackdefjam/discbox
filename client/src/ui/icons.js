@@ -33,5 +33,6 @@ export const ICONS = {
   star: svg('<path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z" fill="currentColor"/>'),
   starOutline: svg(`<path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z" ${stroke} stroke-width="1.8"/>`),
   pair: svg(`<rect x="3" y="5" width="9" height="13" rx="1.5" ${stroke} stroke-width="1.8"/><rect x="12" y="5" width="9" height="13" rx="1.5" ${stroke} stroke-width="1.8"/><path d="M5.5 9h4M14.5 9h4M14.5 12h4M14.5 15h2.5" ${stroke} stroke-width="1.4"/>`),
+  turntable: svg(`<rect x="2.5" y="4.5" width="19" height="15" rx="2" ${stroke} stroke-width="1.7"/><circle cx="10" cy="12" r="5" ${stroke} stroke-width="1.7"/><circle cx="10" cy="12" r="1.2" fill="currentColor"/><path d="M18.5 6.5v6.5l-3.2 2.8" ${stroke} stroke-width="1.7"/>`),
   gamepad: svg(`<path d="M7 8h10a4 4 0 0 1 4 4.5l-.6 4a2.3 2.3 0 0 1-4 1.2L14.6 16H9.4l-1.8 1.7a2.3 2.3 0 0 1-4-1.2l-.6-4A4 4 0 0 1 7 8z" ${stroke}/><path d="M7.5 11v3M6 12.5h3" ${stroke}/><circle cx="16" cy="11.5" r="1" fill="currentColor"/><circle cx="17.8" cy="13.5" r="1" fill="currentColor"/>`)
 };

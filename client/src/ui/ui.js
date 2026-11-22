@@ -130,6 +130,7 @@ export class UI {
           </div>
         </div>
         <div class="np-volume">
+          <button class="icon np-deck" title="Plattenspieler (D)">${ICONS.turntable}</button>
           <button class="icon np-mute" title="Stumm (M)">${ICONS.volume}</button>
           <input class="vol" type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" aria-label="Lautstärke">
         </div>
@@ -172,6 +173,12 @@ export class UI {
         <button class="icon v-prev" aria-label="Vorheriges Bild">${ICONS.chevronLeft}</button>
         <figure><img alt=""><figcaption></figcaption></figure>
         <button class="icon v-next" aria-label="Nächstes Bild">${ICONS.chevronRight}</button>
+      </div>
+
+      <button class="deck-pip hidden" title="Plattenspieler groß anzeigen (D)" aria-label="Plattenspieler groß anzeigen"></button>
+      <div class="deck-view hidden" role="dialog" aria-label="Plattenspieler">
+        <button class="btn ghost deck-close">${ICONS.back}<span>Zurück</span><kbd>Esc</kbd></button>
+        <div class="deck-hint">Ziehen zum Drehen · Mausrad zum Zoomen</div>
       </div>
 
       <div class="toasts" aria-live="polite"></div>
@@ -220,6 +227,9 @@ export class UI {
       npShuffle: $(r, '.np-shuffle'),
       npRepeat: $(r, '.np-repeat'),
       npMute: $(r, '.np-mute'),
+      npDeck: $(r, '.np-deck'),
+      deckPip: $(r, '.deck-pip'),
+      deckView: $(r, '.deck-view'),
       seek: $(r, '.seek'),
       tCur: $(r, '.t-cur'),
       tDur: $(r, '.t-dur'),
@@ -315,6 +325,36 @@ export class UI {
     el.npShuffle.addEventListener('click', () => player.setShuffle(!player.shuffle));
     el.npRepeat.addEventListener('click', () => player.cycleRepeat());
     el.npMute.addEventListener('click', () => player.toggleMute());
+    el.npDeck.addEventListener('click', () => actions.toggleDeck());
+    el.deckPip.addEventListener('click', () => actions.openDeck());
+    $(this.root, '.deck-close').addEventListener('click', () => actions.closeDeck());
+    // Große Plattenspieler-Ansicht: ziehen dreht, Mausrad zoomt
+    const dv = el.deckView;
+    let drag = null;
+    dv.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      dv.setPointerCapture(e.pointerId);
+    });
+    dv.addEventListener('pointermove', (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      actions.deckOrbit(e.clientX - drag.x, e.clientY - drag.y);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    });
+    const end = (e) => {
+      if (drag?.id === e.pointerId) drag = null;
+    };
+    dv.addEventListener('pointerup', end);
+    dv.addEventListener('pointercancel', end);
+    dv.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        actions.deckZoom(e.deltaY);
+      },
+      { passive: false }
+    );
     el.vol.addEventListener('input', () => {
       player.setVolume(Number(el.vol.value) / 100);
       store.updateSettings({ volume: player.volume });
@@ -564,6 +604,41 @@ export class UI {
     this.el.pCoverStatus.textContent = text;
   }
 
+  /** Abstand des Plattenspieler-Bildes vom unteren Rand: über der Player-Leiste. */
+  playerOffset() {
+    const p = this.el.player;
+    if (!p || p.classList.contains('hidden')) return 16;
+    const r = p.getBoundingClientRect();
+    return Math.max(16, window.innerHeight - r.top);
+  }
+
+  /** Unterkante der Kopfleiste (für das Plattenspieler-Bild auf schmalen Bildschirmen). */
+  topOffset() {
+    const t = this.root.querySelector('.topbar');
+    return t ? Math.max(60, t.getBoundingClientRect().bottom) : 110;
+  }
+
+  /** Klickfläche über dem kleinen Plattenspieler-Bild (Rechteck in CSS-Pixeln, Ursprung unten links). */
+  placeDeckPip(rect, vis, full) {
+    const b = this.el.deckPip;
+    const show = vis > 0.6 && full < 0.02;
+    b.classList.toggle('hidden', !show);
+    document.body.classList.toggle('deck-on', vis > 0.02);
+    document.body.style.setProperty('--deck-edge', `${Math.round(rect.x + rect.w)}px`);
+    if (!show) return;
+    b.style.left = `${rect.x}px`;
+    b.style.bottom = `${rect.y}px`;
+    b.style.width = `${rect.w}px`;
+    b.style.height = `${rect.h}px`;
+  }
+
+  showDeckView(open) {
+    this.deckOpen = open;
+    this.el.deckView.classList.toggle('hidden', !open);
+    document.body.classList.toggle('deck-open', open);
+    this.el.npDeck.classList.toggle('active', open);
+  }
+
   setLidButton(label) {
     $(this.el.pLid, 'span').textContent = label;
   }
@@ -729,6 +804,12 @@ export class UI {
           ${opt('black', 'Schwarz', s.tray)}${opt('clear', 'Klar', s.tray)}
         </select></label>
       </section>
+      <section><h3>Plattenspieler</h3>
+        ${check('deck', 'Plattenspieler beim Abspielen zeigen', 'Unten links über der Player-Leiste; ein Klick (oder Taste D) zeigt ihn groß')}
+        <label class="row"><span>Auf dem Teller</span><select data-key="deckDisc">
+          ${opt('cd', 'die CD des Albums', s.deckDisc)}${opt('vinyl', 'eine Schallplatte mit dem Cover als Label', s.deckDisc)}
+        </select></label>
+      </section>
       <section><h3>Bibliothek</h3>
         <p class="info">${st ? `${st.albums.toLocaleString('de-DE')} Alben · ${st.tracks.toLocaleString('de-DE')} Titel · Frontcover: ${st.covers.front} · Rückseiten: ${st.covers.back}` : ''}</p>
         <p class="info">${st?.scannedAt ? `Zuletzt eingelesen: ${new Date(st.scannedAt).toLocaleString('de-DE')}` : ''}</p>
@@ -786,6 +867,7 @@ export class UI {
           ${row(['Leertaste'], 'Wiedergabe / Pause')}
           ${row(['[', ']'], 'Vorheriger / nächster Titel')}
           ${row(['M'], 'Stumm')}
+          ${row(['D'], 'Plattenspieler groß anzeigen / zurück')}
           ${row(['+', '−'], 'Lautstärke')}
           ${row(['⇧ ←', '⇧ →'], '10 Sekunden spulen')}
         </table></section>

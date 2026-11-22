@@ -45,6 +45,22 @@ export class Input {
       }
       return;
     }
+    if (ui.deckOpen && !ui.typing) {
+      // Große Plattenspieler-Ansicht: nur Zurück und die Wiedergabe-Tasten
+      const back = k === 'Escape' || k === 'Backspace' || k === 'd' || k === 'D';
+      if (back) actions.closeDeck();
+      else if (k === ' ') player.toggle();
+      else if (k === '[') player.prev();
+      else if (k === ']') player.next();
+      else if (k === 'm' || k === 'M') player.toggleMute();
+      else if (k === '+' || k === '=') player.setVolume(player.volume + 0.05);
+      else if (k === '-') player.setVolume(player.volume - 0.05);
+      else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+        if (player.current) player.seek(player.time + (k === 'ArrowLeft' ? -10 : 10));
+      } else return;
+      e.preventDefault();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && (k === 'f' || k === 'k')) {
       e.preventDefault();
       ui.focusSearch();
@@ -155,6 +171,10 @@ export class Input {
       case 'm':
       case 'M':
         player.toggleMute();
+        break;
+      case 'd':
+      case 'D':
+        actions.toggleDeck();
         break;
       case '+':
       case '=':
@@ -312,6 +332,23 @@ export class Input {
 
     const { ui, store, actions, player, carousel } = this;
     let active = false;
+    if (ui.deckOpen) {
+      // Große Plattenspieler-Ansicht: Sticks drehen die Kamera, B zurück, Start = Pause
+      const ax = Math.abs(lx) > 0.2 ? lx : gp.axes[2] ?? 0;
+      const ay = Math.abs(ly) > 0.2 ? ly : gp.axes[3] ?? 0;
+      if (Math.abs(ax) > 0.18 || Math.abs(ay) > 0.18) {
+        actions.deckOrbit(ax * dt * 420, ay * dt * 260);
+        active = true;
+      }
+      if (edge(1) || edge(10)) actions.closeDeck();
+      if (edge(9)) player.toggle();
+      if (edge(6)) player.prev();
+      if (edge(7)) player.next();
+      for (const i of [1, 6, 7, 9, 10]) if (edge(i)) active = true;
+      pad.prev = gp.buttons.map((b) => b.pressed || b.value > 0.6);
+      if (active) this.onActivity();
+      return;
+    }
     const fireX = (dir) => {
       if (ui.viewer) return ui.viewerStep(dir);
       if (ui.modal) return;
@@ -399,7 +436,9 @@ export class Input {
     }
     if (edge(10)) {
       active = true;
+      // Linker Stick drücken: in der Detailansicht Booklet, sonst Plattenspieler groß
       if (this.inspecting && ui.panelDetail?.tracks?.length) actions.openBooklet();
+      else if (player.current) actions.openDeck();
     }
 
     const rx = gp.axes[2] ?? 0;

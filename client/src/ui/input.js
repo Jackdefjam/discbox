@@ -1,5 +1,7 @@
 // Tastatur, Maus/Touch, Mausrad und Gamepad.
 
+import { VIEW_ORDER } from '../core/store.js';
+
 const DRAG_PX = 6;
 
 export class Input {
@@ -45,6 +47,14 @@ export class Input {
       }
       return;
     }
+    if (ui.pickOpen && (k === 'Escape' || !ui.typing)) {
+      // Auswahlfenster „Zur Wiedergabeliste“: Esc schließt, sonst nur Tab/Enter darin
+      if (k === 'Escape') {
+        ui.closePopover();
+        e.preventDefault();
+      }
+      return;
+    }
     if (ui.deckOpen && !ui.typing) {
       // Große Plattenspieler-Ansicht: nur Zurück und die Wiedergabe-Tasten
       const back = k === 'Escape' || k === 'Backspace' || k === 'd' || k === 'D';
@@ -64,6 +74,12 @@ export class Input {
     if ((e.ctrlKey || e.metaKey) && (k === 'f' || k === 'k')) {
       e.preventDefault();
       ui.focusSearch();
+      return;
+    }
+    if (e.altKey && !ui.typing && this.inspecting && (k === 'ArrowUp' || k === 'ArrowDown')) {
+      // Wiedergabeliste: gewählten Titel verschieben
+      ui.moveFocusedTrack(k === 'ArrowUp' ? -1 : 1);
+      e.preventDefault();
       return;
     }
     if (ui.typing || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -144,7 +160,21 @@ export class Input {
         break;
       case 'v':
       case 'V':
-        store.setCollection(store.collection === 'favorites' ? 'all' : 'favorites');
+        actions.cycleView();
+        break;
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+        actions.setView(VIEW_ORDER[Number(k) - 1]);
+        break;
+      case 'w':
+      case 'W':
+        actions.addCurrent();
+        break;
+      case 'Delete':
+        if (inspect) ui.removeFocusedTrack();
+        else handled = false;
         break;
       case 'l':
       case 'L':

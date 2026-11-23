@@ -6,6 +6,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import express from 'express';
 import { KINDS, renderArt } from './art.js';
+import { CollectionError, Collections } from './collections.js';
 import { extractMbid } from './online.js';
 import { sendDirect } from './stream.js';
 import { isInside } from './util.js';
@@ -49,7 +50,11 @@ async function loadCustomThemes(dataDir, log) {
   return themes;
 }
 
-export function createApp({ config, log, library, transcoder }) {
+export function createApp({ config, log, library, transcoder, collections }) {
+  if (!collections) {
+    collections = new Collections({ config, log, library });
+    collections.init().catch((err) => log.warn('Wiedergabelisten nicht geladen:', err.message));
+  }
   const app = express();
   app.disable('x-powered-by');
   app.set('etag', 'weak');
@@ -156,6 +161,62 @@ export function createApp({ config, log, library, transcoder }) {
     const favorite = req.body?.favorite !== false;
     const changed = Math.max(0, await library.setFavorite(ids, favorite));
     res.json({ changed, favorite });
+  });
+
+  // Wiedergabelisten
+  const handle = (fn) => async (req, res) => {
+    try {
+      await fn(req, res);
+    } catch (err) {
+      if (err instanceof CollectionError) return res.status(err.status).json({ error: err.message });
+      throw err;
+    }
+  };
+  app.get('/api/playlists', (_req, res) => res.json({ playlists: collections.list() }));
+  app.get(
+    '/api/playlists/:id',
+    handle((req, res) => res.json(collections.get(req.params.id)))
+  );
+  app.post(
+    '/api/playlists',
+    handle((req, res) => res.status(201).json(collections.create(req.body?.name, req.body?.trackIds)))
+  );
+  app.patch(
+    '/api/playlists/:id',
+    handle((req, res) => res.json(collections.rename(req.params.id, req.body?.name)))
+  );
+  app.post(
+    '/api/playlists/:id/tracks',
+    handle((req, res) => res.json(collections.add(req.params.id, req.body?.trackIds)))
+  );
+  app.put(
+    '/api/playlists/:id/tracks',
+    handle((req, res) => res.json(collections.setTracks(req.params.id, req.body?.trackIds)))
+  );
+  app.delete(
+    '/api/playlists/:id',
+    handle((req, res) => {
+      collections.remove(req.params.id);
+      res.status(204).end();
+    })
+  );
+
+  // Hörverlauf: Wiedergaben melden (für „Zuletzt gehört“ und die Statistik)
+  app.get('/api/history', (req, res) => {
+    const limit = req.query.limit === undefined ? 100 : Number(req.query.limit);
+    res.json(collections.history({ limit: Number.isFinite(limit) ? limit : 100 }));
+  });
+  app.post('/api/history', (req, res) => {
+    const trackId = String(req.body?.trackId ?? '');
+    if (!trackId) return res.status(400).json({ error: 'trackId fehlt' });
+    const at = Number(req.body?.at);
+    const stat = collections.record(trackId, Number.isFinite(at) && at > 0 && at <= Date.now() + 60_000 ? at : Date.now());
+    if (!stat) return res.status(404).json({ error: 'Titel nicht gefunden' });
+    res.json(stat);
+  });
+  app.delete('/api/history', (_req, res) => {
+    collections.clearHistory();
+    res.status(204).end();
   });
 
   app.get('/api/themes', async (_req, res) => {

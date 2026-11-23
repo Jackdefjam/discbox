@@ -7,6 +7,7 @@ import { artUrl } from '../core/api.js';
 import { drawDisc } from './artgen.js';
 import { albumHashColor, mixHex } from './color.js';
 import { Slot } from './carousel.js';
+import { drawMixtapeDisc, drawMixtapeFront, loadMixTiles, mixtapeColor } from './mixtape.js';
 import { Turntable, drawVinylLabel, grooveTextures } from './turntable.js';
 
 const ease = (t) => t * t * (3 - 2 * t);
@@ -146,6 +147,7 @@ export class Deck {
       settings: store.settings,
       edgesVisible: true,
       cachedDetail: (id) => store.cachedDetail(id),
+      albumById: (id) => store.albumById(id),
       onSlotColor: () => {}
     });
     this.slot.shadow.visible = false;
@@ -244,12 +246,13 @@ export class Deck {
       this.hideAt = performance.now() + 1800; // Arm erst zurückfahren lassen
       return;
     }
-    const album = cur.album;
+    // Album oder Wiedergabeliste (dann liegt die selbst gebrannte CD auf dem Teller)
+    const album = this.player.disc;
     if (this.album?.id === album.id) return;
     this.album = album;
     const token = (this.token = (this.token ?? 0) + 1);
     this.#release();
-    const summary = this.store.all.find((a) => a.id === album.id) ?? album;
+    const summary = this.store.albumById(album.id) ?? album;
     this.slot.bind(summary, -1);
     this.slot.shadow.visible = false;
     this.slot.case.setLid(1);
@@ -259,8 +262,9 @@ export class Deck {
     this.#applyCaseDisc();
 
     // Rillenbild nach den Titellängen
-    const durations = (album.tracks ?? []).map((t) => t.duration || 180);
+    const durations = (album.tracks ?? []).filter((t) => t.available !== false).map((t) => t.duration || 180);
     const grooves = grooveTextures(durations.length ? durations : [album.duration || 2400]);
+    if (album.kind === 'playlist') return this.#bindMixtape(album, summary, grooves, token);
 
     let frontEntry = null;
     if (album.art?.front) {
@@ -297,6 +301,25 @@ export class Deck {
     this.turntable.setCdTexture(discTex);
   }
 
+  /** Wiedergabeliste: Label aus der Cover-Collage, CD-R mit Stiftbeschriftung. */
+  async #bindMixtape(pl, summary, grooves, token) {
+    const byId = (id) => this.store.albumById(id);
+    this.color = mixtapeColor(summary, byId);
+    const tiles = await loadMixTiles(this.textures, byId, summary, 2).catch(() => []);
+    if (token !== this.token) return;
+    const front = drawMixtapeFront(summary, tiles, 512);
+    this.color = this.textures.colorOf({ image: front }) ?? this.color;
+    const label = new THREE.CanvasTexture(drawVinylLabel(summary, this.color, front, false));
+    label.colorSpace = THREE.SRGBColorSpace;
+    label.anisotropy = this.textures.anisotropy;
+    this.labelTexture?.dispose();
+    this.labelTexture = label;
+    this.turntable.setVinyl(label, grooves);
+    const disc = this.textures.generated(`mixdisc:${summary.id}:${summary.updated}`, () => drawMixtapeDisc(summary));
+    this.#hold(disc);
+    this.turntable.setCdTexture(disc.texture);
+  }
+
   #applyCaseDisc() {
     // Bei der CD auf dem Teller ist das Fach der Hülle leer
     if (this.slot?.case) this.slot.case.discGroup.visible = this.turntable.discKind !== 'cd';
@@ -306,7 +329,7 @@ export class Deck {
   #progress() {
     const cur = this.player.current;
     if (!cur) return 0;
-    const tracks = cur.album.tracks ?? [];
+    const tracks = (cur.disc ?? cur.album).tracks ?? [];
     let total = 0;
     let before = 0;
     let found = false;

@@ -1,11 +1,12 @@
 import '@fontsource-variable/inter';
 import '@fontsource/oswald/400.css';
 import '@fontsource/oswald/700.css';
+import '@fontsource-variable/caveat';
 import './style.css';
 
 import { api } from './core/api.js';
 import { Player } from './core/player.js';
-import { Store } from './core/store.js';
+import { Store, VIEW_ORDER, VIEWS } from './core/store.js';
 import { applyThemeCss, buildThemeList } from './core/themes.js';
 import { Carousel } from './scene/carousel.js';
 import { albumHashColor } from './scene/color.js';
@@ -37,7 +38,10 @@ async function loadFonts() {
         document.fonts.load('700 40px Oswald'),
         document.fonts.load('400 40px Oswald'),
         document.fonts.load('600 20px "Inter Variable"'),
-        document.fonts.load('500 20px "Inter Variable"')
+        document.fonts.load('500 20px "Inter Variable"'),
+        // Handschrift für die selbst gebrannten CDs der Wiedergabelisten
+        document.fonts.load('700 40px "Caveat Variable"'),
+        document.fonts.load('500 40px "Caveat Variable"')
       ]),
       new Promise((r) => setTimeout(r, 2500))
     ]);
@@ -52,8 +56,16 @@ async function boot() {
     return;
   }
   const store = new Store();
-  const [status, customThemes] = await Promise.all([api.status(), api.themes(), loadFonts()]);
+  const [status, customThemes, , playlists, history] = await Promise.all([
+    api.status(),
+    api.themes(),
+    loadFonts(),
+    api.playlists().catch(() => null),
+    api.history(0).catch(() => null)
+  ]);
   store.status = status;
+  if (history) store.setHistory(history);
+  if (playlists) store.setPlaylists(playlists.playlists);
   const themes = buildThemeList(customThemes);
 
   const stage = new Stage(canvas);
@@ -65,6 +77,56 @@ async function boot() {
   // Plattenspieler beim Abspielen (eigene kleine Szene, per Klick groß)
   const deck = new Deck({ stage, factory, textures, store, player });
   carousel.discAway = (id) => deck.holdsCd(id);
+
+  // ---------- Wiedergabelisten: Hilfen ----------
+  /** Titel einer Liste als Warteschlange; nicht mehr vorhandene Titel werden übersprungen. */
+  function playlistItems(detail, index = 0) {
+    const items = [];
+    let start = -1;
+    detail.tracks.forEach((t, i) => {
+      if (t.available === false) return;
+      if (start < 0 && i >= index) start = items.length;
+      const album = store.albumById(t.albumId) ?? { id: t.albumId, title: t.albumTitle ?? '', artist: t.albumArtist ?? '', art: {} };
+      items.push({ track: t, album });
+    });
+    return { items, start: Math.max(0, start) };
+  }
+
+  const plName = (pl) => `„${pl.title ?? pl.name}“`;
+
+  /** Ansicht neu laden, falls ein anderes Gerät etwas geändert hat. */
+  async function refreshPlaylists() {
+    try {
+      store.setPlaylists((await api.playlists()).playlists);
+    } catch {
+      /* offline */
+    }
+  }
+  async function refreshHistory() {
+    try {
+      store.setHistory(await api.history(0));
+    } catch {
+      /* offline */
+    }
+  }
+
+  /** Reihenfolge/Inhalt einer Liste setzen; Anzeige sofort, Server im Hintergrund. */
+  async function savePlaylistOrder(pl, tracks, message) {
+    const detail = store.cachedDetail(pl.id);
+    if (detail) {
+      detail.tracks = tracks.map((t, i) => ({ ...t, no: i + 1 }));
+      if (store.mode === 'inspect' && store.current?.id === pl.id) ui.renderPanel(store.current, detail);
+    }
+    try {
+      const full = await api.setPlaylistTracks(pl.playlistId, tracks.map((t) => t.id));
+      store.upsertPlaylist(full);
+      if (message) ui.toast(message, { ms: 1800 });
+    } catch (err) {
+      ui.toast(`Liste nicht gespeichert: ${err.message}`, { kind: 'error' });
+      store.details.delete(pl.id);
+      refreshPlaylists();
+    }
+  }
 
   // ---------- Aktionen ----------
   const actions = {
@@ -79,6 +141,7 @@ async function boot() {
     async playAlbum({ shuffle = false } = {}) {
       const album = store.current;
       if (!album) return;
+      if (album.kind === 'playlist') return actions.playPlaylist(album, 0, { shuffle });
       try {
         const detail = await store.detail(album.id);
         player.playAlbum(detail, 0, { shuffle });
@@ -86,11 +149,31 @@ async function boot() {
         ui.toast(`Album konnte nicht geladen werden: ${err.message}`, { kind: 'error' });
       }
     },
+    /** Wiedergabeliste abspielen (ab Position index). */
+    async playPlaylist(pl, index = 0, { shuffle = false } = {}) {
+      try {
+        const detail = await store.detail(pl.id);
+        const { items, start } = playlistItems(detail, index);
+        if (!items.length) {
+          return ui.toast(detail.tracks.length ? 'Keiner der Titel ist noch in der Bibliothek.' : `${plName(pl)} ist noch leer – füge Titel über ＋ hinzu.`);
+        }
+        player.playItems(items, start, { shuffle, disc: detail });
+      } catch (err) {
+        ui.toast(`Liste konnte nicht geladen werden: ${err.message}`, { kind: 'error' });
+      }
+    },
     async playTrack(i) {
       const album = store.current;
       if (!album) return;
       const detail = await store.detail(album.id);
       const cur = player.current;
+      if (album.kind === 'playlist') {
+        const t = detail.tracks[i];
+        if (!t) return;
+        if (t.available === false) return ui.toast('Dieser Titel ist nicht mehr in der Bibliothek.');
+        if (cur && player.disc?.id === detail.id && cur.track.id === t.id) return player.toggle();
+        return actions.playPlaylist(album, i);
+      }
       if (cur && cur.album.id === detail.id && cur.track.id === detail.tracks[i]?.id) {
         player.toggle();
         return;
@@ -118,12 +201,139 @@ async function boot() {
     deckZoom(delta) {
       deck.zoom(delta);
     },
+    // ---------- Ansichten ----------
+    setView(view) {
+      if (!VIEWS[view]) return;
+      store.setCollection(view);
+      if (view === 'playlists') refreshPlaylists();
+      if (view === 'recent') refreshHistory();
+    },
+    cycleView() {
+      const i = VIEW_ORDER.indexOf(store.collection);
+      const next = VIEW_ORDER[(i + 1) % VIEW_ORDER.length];
+      actions.setView(next);
+      ui.toast(`Ansicht: ${VIEWS[next].label}`, { ms: 1200 });
+    },
+
+    // ---------- Wiedergabelisten ----------
+    /** Auswahlfenster „Zur Wiedergabeliste“ für Titel (anchor: Knopf, an dem es erscheint). */
+    pickPlaylist(trackIds, { anchor, label } = {}) {
+      if (!trackIds?.length) return;
+      ui.openPlaylistPicker({ trackIds, anchor, label });
+    },
+    /** Taste W / Knopf „＋ Liste“: gewählter Titel in der Detailansicht, sonst das ganze Album. */
+    async addCurrent(anchor) {
+      const album = store.current;
+      if (!album || album.kind === 'playlist') return;
+      try {
+        const detail = await store.detail(album.id);
+        const t = store.mode === 'inspect' && ui.focusTrack >= 0 ? detail.tracks[ui.focusTrack] : null;
+        if (t) actions.pickPlaylist([t.id], { anchor: anchor ?? ui.trackAnchor(ui.focusTrack), label: `„${t.title}“` });
+        else actions.pickPlaylist(detail.tracks.map((x) => x.id), { anchor: anchor ?? ui.albumAnchor(), label: `Album „${album.title}“ (${detail.tracks.length} Titel)` });
+      } catch (err) {
+        ui.toast(`Album konnte nicht geladen werden: ${err.message}`, { kind: 'error' });
+      }
+    },
+    addPlaying(anchor) {
+      const cur = player.current;
+      if (cur) actions.pickPlaylist([cur.track.id], { anchor, label: `„${cur.track.title}“` });
+    },
+    async addToPlaylist(playlistId, trackIds) {
+      try {
+        const res = await api.addToPlaylist(playlistId, trackIds);
+        const pl = store.upsertPlaylist(res.playlist);
+        if (res.added) {
+          ui.toast(
+            `${res.added === 1 ? '1 Titel' : `${res.added} Titel`} zu ${plName(pl)} hinzugefügt${res.skipped ? ` (${res.skipped} war${res.skipped === 1 ? '' : 'en'} schon drin)` : ''}`,
+            { ms: 2400 }
+          );
+        } else ui.toast(`Schon alles in ${plName(pl)}.`, { ms: 2000 });
+      } catch (err) {
+        ui.toast(`Nicht hinzugefügt: ${err.message}`, { kind: 'error' });
+      }
+    },
+    async createPlaylist(name, trackIds = [], { select = false } = {}) {
+      try {
+        const { playlist, added } = await api.createPlaylist(name, trackIds);
+        const pl = store.upsertPlaylist(playlist);
+        ui.toast(`Wiedergabeliste ${plName(pl)} angelegt${added ? ` – ${added} Titel` : ''}`, { ms: 2400 });
+        if (select) store.selectId(pl.id, { jump: true });
+        return pl;
+      } catch (err) {
+        ui.toast(`Liste nicht angelegt: ${err.message}`, { kind: 'error' });
+        return null;
+      }
+    },
+    async renamePlaylist(name) {
+      const pl = store.current;
+      if (pl?.kind !== 'playlist') return false;
+      try {
+        store.upsertPlaylist(await api.renamePlaylist(pl.playlistId, name));
+        return true;
+      } catch (err) {
+        ui.toast(err.message, { kind: 'error' });
+        return false;
+      }
+    },
+    async deletePlaylist() {
+      const pl = store.current;
+      if (pl?.kind !== 'playlist') return;
+      try {
+        await api.deletePlaylist(pl.playlistId);
+        if (store.mode === 'inspect') store.setMode('browse');
+        store.removePlaylist(pl.id);
+        ui.toast(`${plName(pl)} gelöscht`);
+      } catch (err) {
+        ui.toast(`Nicht gelöscht: ${err.message}`, { kind: 'error' });
+      }
+    },
+    /** Titel in der Liste verschieben (from → to, Positionen ab 0). */
+    async movePlaylistTrack(from, to) {
+      const pl = store.current;
+      const detail = pl?.kind === 'playlist' ? store.cachedDetail(pl.id) : null;
+      if (!detail || from === to || to < 0 || to >= detail.tracks.length) return false;
+      const tracks = [...detail.tracks];
+      const [t] = tracks.splice(from, 1);
+      tracks.splice(to, 0, t);
+      await savePlaylistOrder(pl, tracks);
+      return true;
+    },
+    async removePlaylistTrack(i) {
+      const pl = store.current;
+      const detail = pl?.kind === 'playlist' ? store.cachedDetail(pl.id) : null;
+      const t = detail?.tracks[i];
+      if (!t) return;
+      await savePlaylistOrder(
+        pl,
+        detail.tracks.filter((_, j) => j !== i),
+        `„${t.title}“ aus der Liste entfernt`
+      );
+    },
+    async clearHistory() {
+      try {
+        await api.clearHistory();
+        store.setHistory({ albums: {}, events: 0 });
+        ui.toast('Hörverlauf gelöscht');
+      } catch (err) {
+        ui.toast(`Nicht gelöscht: ${err.message}`, { kind: 'error' });
+      }
+    },
+    gotoPlayingDisc() {
+      const disc = player.disc;
+      if (!disc) return;
+      if (disc.kind === 'playlist') {
+        store.selectId(disc.id, { jump: true });
+        store.setMode('inspect');
+      } else actions.gotoPlaying();
+    },
+
     toggleLid() {
       carousel.toggleLid();
       ui.setLidButton(carousel.lidAction());
     },
     openBooklet() {
       const album = store.current;
+      if (album?.kind === 'playlist') return;
       if (!album?.gallery) return ui.toast('Keine Booklet-Scans in diesem Albumordner.');
       const detail = store.cachedDetail(album.id);
       ui.openViewer(album, detail?.galleryNames ?? []);
@@ -188,7 +398,7 @@ async function boot() {
     },
     async toggleFavorite() {
       const album = store.current;
-      if (!album) return;
+      if (!album || album.kind === 'playlist') return;
       const on = !album.favorite;
       store.markFavorite([album.id], on);
       try {
@@ -267,6 +477,7 @@ async function boot() {
       ui.setLayoutButtons(patch.layout);
     }
     if ('spineDirection' in patch || 'tray' in patch) carousel.refreshAppearance();
+    if ('history' in patch) ui.renderFilters();
   });
 
   // ---------- Zustandswechsel ----------
@@ -316,6 +527,15 @@ async function boot() {
   });
 
   player.on('error', (msg) => ui.toast(msg, { kind: 'error' }));
+  // Hörverlauf: Wiedergabe melden, sobald ein Titel lange genug lief
+  player.on('played', async (item) => {
+    if (store.settings.history === false) return;
+    try {
+      store.notePlay(await api.recordPlay(item.track.id));
+    } catch {
+      /* Server nicht erreichbar: diese Wiedergabe zählt nicht */
+    }
+  });
   player.on('blocked', () => ui.toast('Der Browser hat die Wiedergabe blockiert – bitte einmal auf ▶ klicken.'));
 
   // ---------- Daten laden & Status abfragen ----------
@@ -336,7 +556,11 @@ async function boot() {
     try {
       const status = await api.status();
       store.status = status;
-      if (status.version !== store.version) await reloadAlbums();
+      if (status.version !== store.version) {
+        await reloadAlbums();
+        // Nach einem Scan können Titel verschwunden oder zurück sein
+        if (store.playlists.length) refreshPlaylists();
+      }
       else if (watchOnline && !status.online.pending) {
         const a = store.all.find((x) => x.id === watchOnline);
         store.details.delete(watchOnline);
@@ -396,7 +620,11 @@ async function boot() {
     carousel.panel = ui.panelGeometry();
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) pollSoon(200);
+    if (document.hidden) return;
+    pollSoon(200);
+    // Listen und Verlauf können sich auf einem anderen Gerät geändert haben
+    if (store.collection === 'playlists') refreshPlaylists();
+    if (store.collection === 'recent') refreshHistory();
   });
 
   // ---------- Hauptschleife ----------

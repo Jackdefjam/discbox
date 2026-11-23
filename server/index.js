@@ -1,4 +1,5 @@
 import { createApp } from './app.js';
+import { Collections } from './collections.js';
 import { loadConfig } from './config.js';
 import { Library } from './library.js';
 import { createLogger } from './log.js';
@@ -16,7 +17,10 @@ await library.init();
 const transcoder = new Transcoder(config, log);
 await transcoder.detect();
 
-const app = createApp({ config, log, library, transcoder });
+const collections = new Collections({ config, log, library });
+await collections.init();
+
+const app = createApp({ config, log, library, transcoder, collections });
 const server = app.listen(config.port, config.host, () => {
   log.info(`Weboberfläche: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
 });
@@ -36,6 +40,7 @@ async function shutdown(signal) {
   try {
     if (!library.scanState.running) await library.save();
     await library.online.save.flush();
+    await collections.save.flush();
   } catch (err) {
     log.warn('Beim Beenden nicht gespeichert:', err.message);
   }

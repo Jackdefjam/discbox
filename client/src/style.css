@@ -495,17 +495,26 @@ body.inspecting .rail {
   flex-shrink: 0;
 }
 
-/* Favoriten */
+/* Ansichten: Alle, Favoriten, Zuletzt gehört, Wiedergabelisten */
 .views .seg-btn svg {
   width: 15px;
   height: 15px;
 }
-.views .seg-btn[data-view='favorites'] {
+.views .seg-btn[data-view='favorites'],
+.views .seg-btn[data-view='playlists'] {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
-.fav-count:empty {
+.fav-count:empty,
+.pl-count:empty {
+  display: none;
+}
+/* Was in der Ansicht nicht greift, wird ausgeblendet */
+body[data-view='playlists'] .tools .sort,
+body[data-view='playlists'] .tools .genre,
+body[data-view='playlists'] .tools .complete-only,
+body[data-view='recent'] .tools .sort {
   display: none;
 }
 .btn.is-fav {
@@ -527,6 +536,10 @@ body.inspecting .rail {
   width: 48px;
   height: 48px;
   color: #fbbf24;
+}
+.fe-icon[data-kind='recent'] svg,
+.fe-icon[data-kind='playlists'] svg {
+  color: var(--accent);
 }
 .fe-actions {
   display: flex;
@@ -658,7 +671,7 @@ body.inspecting .filter-empty {
 }
 .p-tracks li {
   display: grid;
-  grid-template-columns: 2.1em 0 1fr auto auto;
+  grid-template-columns: 2.1em 0 1fr auto auto 28px;
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
@@ -758,8 +771,97 @@ body.inspecting .filter-empty {
   }
 }
 .p-tracks li.playing {
-  grid-template-columns: 2.1em 14px 1fr auto auto;
+  grid-template-columns: 2.1em 14px 1fr auto auto 28px;
   color: var(--accent);
+}
+/* Wiedergabeliste: Griff vorne, kein Format-Feld */
+.p-tracks.pl li {
+  grid-template-columns: 18px 2.1em 0 1fr auto 28px;
+}
+.p-tracks.pl li.playing {
+  grid-template-columns: 18px 2.1em 14px 1fr auto 28px;
+}
+.p-tracks li.empty-list {
+  padding: 18px 10px;
+  line-height: 1.6;
+}
+.p-tracks li.gone {
+  color: var(--muted);
+}
+.p-tracks li.gone .t {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+.p-tracks .grip {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  margin-left: -4px;
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 6px;
+}
+.p-tracks .grip svg {
+  width: 16px;
+  height: 16px;
+}
+.p-tracks li:hover .grip,
+.p-tracks li.focus .grip {
+  opacity: 0.9;
+}
+.p-tracks.sorting li {
+  transition: transform 0.16s var(--ease);
+}
+.p-tracks.sorting li.dragging {
+  transition: none;
+  position: relative;
+  z-index: 2;
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--bg-bottom) 55%, var(--panel));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.p-tracks.sorting li.dragging .grip {
+  cursor: grabbing;
+  opacity: 1;
+  color: var(--accent);
+}
+/* Kleine Knöpfe am Zeilenende: ＋ zur Liste, × aus der Liste */
+.row-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.row-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.p-tracks li:hover .row-btn,
+.p-tracks li.focus .row-btn,
+.row-btn:focus-visible {
+  opacity: 1;
+}
+.row-btn:hover {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+}
+.row-btn.rm:hover {
+  color: #f87171;
+}
+@media (hover: none) {
+  .row-btn {
+    opacity: 0.7;
+  }
 }
 .p-tracks li.playing .eq {
   visibility: visible;
@@ -778,6 +880,14 @@ body.inspecting .filter-empty {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.7;
+}
+.p-foot kbd {
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 .p-foot .folder {
   white-space: nowrap;
@@ -845,6 +955,155 @@ body.deck-open .filter-empty {
   color: var(--accent);
 }
 
+/* Panel einer Wiedergabeliste: andere Knöpfe, Umbenennen direkt im Titel */
+.panel.is-playlist .p-fav,
+.panel.is-playlist .p-booklet,
+.panel.is-playlist .p-coveropts,
+.panel.is-playlist .p-addlist,
+.panel:not(.is-playlist) .p-rename,
+.panel:not(.is-playlist) .p-delete {
+  display: none;
+}
+.panel.is-playlist .p-title {
+  cursor: text;
+}
+.p-rename-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.p-rename-input {
+  flex: 1 1 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--bg-bottom) 45%, transparent);
+  font-family: var(--font-title);
+  font-size: 26px;
+  font-weight: 700;
+  user-select: text;
+}
+.btn.p-delete.confirm,
+.btn.s-clearhistory.confirm {
+  color: #fff;
+  background: #dc2626;
+  border-color: transparent;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Auswahlfenster „Zur Wiedergabeliste“ */
+.popover {
+  position: fixed;
+  z-index: 30;
+  width: min(340px, calc(100vw - 16px));
+  max-height: min(440px, calc(100vh - 16px));
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border-radius: 18px;
+  /* Fast deckend: Es liegt meist über der Titelliste, deren Schrift sonst durchscheint */
+  background: color-mix(in srgb, var(--bg-bottom) 95%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  animation: pop-in 0.16s var(--ease);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.pop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 6px 10px;
+}
+.pop-head b {
+  font-size: 14px;
+}
+.pop-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pop-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+.pop-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+.pop-list button:hover,
+.pop-list button:focus-visible {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  outline: none;
+}
+.pop-list button svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+.pop-list .pl-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.pop-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pop-empty {
+  padding: 4px 8px 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pop-new {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-border);
+}
+.pop-list.hidden + .pop-new {
+  border-top: 0;
+  padding-top: 0;
+}
+.pop-new input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--bg-bottom) 40%, transparent);
+  user-select: text;
+}
+
 /* Player-Leiste */
 .player {
   position: absolute;
@@ -854,7 +1113,7 @@ body.deck-open .filter-empty {
   width: min(1120px, calc(100% - 28px));
   height: 72px;
   display: grid;
-  grid-template-columns: 56px minmax(120px, 260px) 1fr 170px;
+  grid-template-columns: 56px minmax(120px, 260px) 1fr 204px;
   align-items: center;
   gap: 16px;
   padding: 8px 18px 8px 8px;
@@ -908,6 +1167,42 @@ body.deck-open .filter-empty {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.np-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Läuft eine Wiedergabeliste: kleiner Link über dem Titel */
+.np-ctx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: -2px 0 1px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--accent) 85%, var(--muted));
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+.np-ctx svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.np-ctx span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-ctx:hover span {
+  text-decoration: underline;
 }
 .np-main {
   display: flex;
@@ -1310,8 +1605,24 @@ input[type='range']:hover::-webkit-slider-thumb {
   .search {
     flex: 1 1 140px;
   }
+  /* Werkzeugleiste als eigene Zeile, bei Bedarf seitlich wischen statt abschneiden */
   .tools {
+    flex: 1 1 100%;
+    margin-left: 0;
     gap: 6px;
+    padding: 2px 2px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .tools::-webkit-scrollbar {
+    display: none;
+  }
+  .tools > * {
+    flex: none;
+  }
+  .views .seg-btn.txt {
+    padding: 0 9px;
   }
   .tools .sort,
   .tools .open-help,
@@ -1350,6 +1661,14 @@ input[type='range']:hover::-webkit-slider-thumb {
   }
   .cap-title {
     font-size: 30px;
+  }
+  .cap-add span {
+    display: none;
+  }
+  .cap-add {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
   }
 }
 @media (prefers-reduced-motion: reduce) {

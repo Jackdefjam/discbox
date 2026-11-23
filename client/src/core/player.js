@@ -1,5 +1,9 @@
 // Audio-Wiedergabe mit Warteschlange, Zufall, Wiederholen, Vorladen des nächsten Titels,
 // Spulen auch bei umgewandelten Streams und Medientasten (MediaSession).
+//
+// Jeder Eintrag der Warteschlange ist { track, album, disc }: album ist das Album des Titels (Cover,
+// Medientasten), disc das, was „im Player liegt“ – das Album selbst oder eine Wiedergabeliste.
+// Nach 30 Sekunden echten Zuhörens (bei kurzen Titeln der Hälfte) meldet der Player „played“.
 
 import { artUrl, streamUrl } from './api.js';
 import { Emitter } from './emitter.js';
@@ -63,6 +67,7 @@ export class Player extends Emitter {
       if (el !== this.a) return;
       this.#maybePreload();
       this.#positionState();
+      this.#listen();
     });
     el.addEventListener('ended', () => {
       if (el === this.a) this.next(true);
@@ -98,10 +103,26 @@ export class Player extends Emitter {
     return { url: streamUrl(item.track, { transcode: transcoded, start: transcoded ? start : 0 }), transcoded };
   }
 
+  /** Was gerade im Player liegt: Album-Details oder Wiedergabeliste (mit Titelliste). */
+  get disc() {
+    return this.current?.disc ?? this.current?.album ?? null;
+  }
+
   /** Spielt ein Album (Details mit Titelliste) ab einem Titel. */
   playAlbum(album, startIndex = 0, { shuffle = false } = {}) {
     if (!album?.tracks?.length) return;
-    const items = album.tracks.map((track) => ({ track, album }));
+    this.playItems(
+      album.tracks.map((track) => ({ track, album })),
+      startIndex,
+      { shuffle, disc: album }
+    );
+  }
+
+  /** Spielt beliebige Titel ({ track, album }) ab startIndex; disc = Album oder Wiedergabeliste. */
+  playItems(list, startIndex = 0, { shuffle = false, disc = null } = {}) {
+    if (!list?.length) return;
+    const items = list.map((it) => ({ ...it, disc: disc ?? it.album }));
+    startIndex = Math.max(0, Math.min(items.length - 1, startIndex));
     this.original = items;
     this.shuffle = shuffle;
     if (shuffle) {
@@ -119,6 +140,9 @@ export class Player extends Emitter {
     this.index = index;
     const item = this.current;
     if (!item) return this.stop();
+    // Neue Wiedergabe zählen (Fortsetzen nach dem Spulen in umgewandelten Streams nicht)
+    if (!(startAt > 0 && this.listening?.item === item)) this.listening = { item, listened: 0, last: null, counted: false };
+    else this.listening.last = null;
     if (startAt === 0 && this.preloadFor === item.track.id && this.b.getAttribute('src')) {
       const old = this.a;
       this.a = this.b;
@@ -148,6 +172,24 @@ export class Player extends Emitter {
     }
     this.emit('track', item);
     this.#updateSession(item);
+  }
+
+  /** Echte Hörzeit sammeln: Sprünge (Spulen) zählen nicht, Pausen auch nicht. */
+  #listen() {
+    const l = this.listening;
+    if (!l || l.counted || l.item !== this.current) return;
+    const t = this.time;
+    const last = l.last;
+    l.last = t;
+    if (last == null || this.a.paused) return;
+    const d = t - last;
+    if (d > 0 && d < 1.5) l.listened += d;
+    const dur = this.duration;
+    const need = dur > 0 ? Math.min(30, dur * 0.5) : 30;
+    if (l.listened >= need) {
+      l.counted = true;
+      this.emit('played', l.item);
+    }
   }
 
   #onError() {

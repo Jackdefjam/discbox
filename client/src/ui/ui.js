@@ -1,7 +1,7 @@
 // Bedienoberfläche über der 3D-Szene.
 
 import { artUrl } from '../core/api.js';
-import { SHELF_GROUPS, SORTS } from '../core/store.js';
+import { SHELF_GROUPS, SORTS, VIEW_ORDER, VIEWS, relativeTime } from '../core/store.js';
 import { fmtTime } from '../scene/artgen.js';
 import { LAYOUT_ORDER, LAYOUTS } from '../scene/layouts.js';
 import { ICONS } from './icons.js';
@@ -52,8 +52,10 @@ export class UI {
         <label class="search">${ICONS.search}<input type="search" placeholder="Suchen …  ( / )" autocomplete="off" spellcheck="false" aria-label="Suchen"><button class="clear" title="Suche leeren" aria-label="Suche leeren">${ICONS.close}</button></label>
         <div class="tools">
           <div class="seg views" role="tablist" aria-label="Ansicht">
-            <button class="seg-btn txt" data-view="all" title="Alle Alben (V)">Alle</button>
-            <button class="seg-btn txt" data-view="favorites" title="Favoriten (V)">${ICONS.star}<span class="fav-count"></span></button>
+            <button class="seg-btn txt" data-view="all" title="Alle Alben (1)">Alle</button>
+            <button class="seg-btn txt" data-view="favorites" title="Favoriten (2)" aria-label="Favoriten">${ICONS.star}<span class="fav-count"></span></button>
+            <button class="seg-btn txt" data-view="recent" title="Zuletzt gehört (3)" aria-label="Zuletzt gehört">${ICONS.history}</button>
+            <button class="seg-btn txt" data-view="playlists" title="Wiedergabelisten (4)" aria-label="Wiedergabelisten">${ICONS.playlist}<span class="pl-count"></span></button>
           </div>
           <button class="icon complete-only" title="Nur Alben mit Front- und Rückseite" aria-label="Nur Alben mit Front- und Rückseite">${ICONS.pair}</button>
           <select class="sort" title="Sortierung" aria-label="Sortierung">${sortOptions}</select>
@@ -75,6 +77,7 @@ export class UI {
           <button class="btn primary cap-play">${ICONS.play}<span>Abspielen</span></button>
           <button class="btn ghost cap-open">${ICONS.open}<span>Ansehen</span></button>
           <button class="btn ghost cap-fav" title="Favorit (S)">${ICONS.starOutline}<span>Favorit</span></button>
+          <button class="btn ghost cap-add" title="Album zu einer Wiedergabeliste hinzufügen (W)">${ICONS.listAdd}<span>Liste</span></button>
         </div>
         <div class="cap-count"></div>
       </section>
@@ -86,6 +89,11 @@ export class UI {
           <button class="btn ghost small p-back">${ICONS.back}<span>Zurück</span><kbd>Esc</kbd></button>
           <div class="p-artist"></div>
           <h1 class="p-title"></h1>
+          <form class="p-rename-form hidden">
+            <input class="p-rename-input" maxlength="80" spellcheck="false" aria-label="Name der Wiedergabeliste">
+            <button class="btn small primary" type="submit">Speichern</button>
+            <button class="btn small ghost p-rename-cancel" type="button">Abbrechen</button>
+          </form>
           <div class="p-chips"></div>
           <div class="p-actions">
             <button class="btn primary p-play">${ICONS.play}<span>Abspielen</span></button>
@@ -95,6 +103,9 @@ export class UI {
             <button class="btn ghost p-flip" title="Umdrehen (F)">${ICONS.flip}<span>Umdrehen</span></button>
             <button class="btn ghost p-booklet" title="Booklet & Scans (B)">${ICONS.booklet}<span>Booklet</span></button>
             <button class="btn ghost p-coveropts" title="Cover-Optionen">${ICONS.cloud}<span>Cover</span></button>
+            <button class="btn ghost p-addlist" title="Album zu einer Wiedergabeliste hinzufügen (W)">${ICONS.listAdd}<span>Liste</span></button>
+            <button class="btn ghost p-rename" title="Liste umbenennen">${ICONS.edit}<span>Umbenennen</span></button>
+            <button class="btn ghost p-delete" title="Liste löschen">${ICONS.trash}<span>Löschen</span></button>
           </div>
           <div class="p-cover hidden">
             <div class="p-cover-status"></div>
@@ -114,7 +125,7 @@ export class UI {
 
       <footer class="player chrome hidden">
         <button class="np-thumb" title="Zum Album">${ICONS.disc}<img alt=""></button>
-        <div class="np-text"><div class="np-title"></div><div class="np-sub"></div></div>
+        <div class="np-text"><button class="np-ctx hidden" title="Zur Wiedergabeliste"></button><div class="np-title"></div><div class="np-sub"><span class="np-src"></span></div></div>
         <div class="np-main">
           <div class="np-controls">
             <button class="icon np-shuffle" title="Zufall">${ICONS.shuffle}</button>
@@ -130,6 +141,7 @@ export class UI {
           </div>
         </div>
         <div class="np-volume">
+          <button class="icon np-add" title="Titel zu einer Wiedergabeliste hinzufügen">${ICONS.listAdd}</button>
           <button class="icon np-deck" title="Plattenspieler (D)">${ICONS.turntable}</button>
           <button class="icon np-mute" title="Stumm (M)">${ICONS.volume}</button>
           <input class="vol" type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" aria-label="Lautstärke">
@@ -181,6 +193,15 @@ export class UI {
         <div class="deck-hint">Ziehen zum Drehen · Mausrad zum Zoomen</div>
       </div>
 
+      <div class="popover pick hidden" role="dialog" aria-label="Zur Wiedergabeliste hinzufügen">
+        <div class="pop-head"><b class="pop-title">Zur Wiedergabeliste</b><span class="pop-label"></span></div>
+        <ul class="pop-list"></ul>
+        <form class="pop-new">
+          <input class="pop-name" maxlength="80" placeholder="Neue Liste …" spellcheck="false" aria-label="Name der neuen Wiedergabeliste">
+          <button class="btn small primary" type="submit">${ICONS.plus}<span>Anlegen</span></button>
+        </form>
+      </div>
+
       <div class="toasts" aria-live="polite"></div>
     `
     );
@@ -194,6 +215,22 @@ export class UI {
       scanBtn: $(r, '.scan'),
       views: [...r.querySelectorAll('[data-view]')],
       favCount: $(r, '.fav-count'),
+      plCount: $(r, '.pl-count'),
+      capAdd: $(r, '.cap-add'),
+      feIcon: $(r, '.fe-icon'),
+      pRenameForm: $(r, '.p-rename-form'),
+      pRenameInput: $(r, '.p-rename-input'),
+      pAddList: $(r, '.p-addlist'),
+      pDelete: $(r, '.p-delete'),
+      npSrc: $(r, '.np-src'),
+      npCtx: $(r, '.np-ctx'),
+      npAdd: $(r, '.np-add'),
+      pick: $(r, '.popover.pick'),
+      popTitle: $(r, '.pop-title'),
+      popLabel: $(r, '.pop-label'),
+      popList: $(r, '.pop-list'),
+      popNew: $(r, '.pop-new'),
+      popName: $(r, '.pop-name'),
       completeOnly: $(r, '.complete-only'),
       capFav: $(r, '.cap-fav'),
       pFav: $(r, '.p-fav'),
@@ -279,14 +316,82 @@ export class UI {
       store.setQuery('');
     });
     el.sort.addEventListener('change', () => store.setSort(el.sort.value));
-    for (const b of el.views) b.addEventListener('click', () => store.setCollection(b.dataset.view));
+    for (const b of el.views) b.addEventListener('click', () => actions.setView(b.dataset.view));
     el.completeOnly.addEventListener('click', () => store.setCompleteOnly(!store.settings.completeOnly));
     el.capFav.addEventListener('click', () => actions.toggleFavorite());
     el.pFav.addEventListener('click', () => actions.toggleFavorite());
     el.feActions.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-act]');
-      if (b) actions[b.dataset.act]?.();
+      if (!b) return;
+      if (b.dataset.act === 'newPlaylist') this.openPlaylistPicker({ trackIds: [], anchor: b });
+      else if (b.dataset.act === 'enableHistory') actions.changeSetting('history', true);
+      else actions[b.dataset.act]?.();
     });
+    el.capAdd.addEventListener('click', () => actions.addCurrent(el.capAdd));
+    el.pAddList.addEventListener('click', () => actions.addCurrent(el.pAddList));
+    el.npAdd.addEventListener('click', () => actions.addPlaying(el.npAdd));
+    el.npCtx.addEventListener('click', () => actions.gotoPlayingDisc());
+
+    // Wiedergabeliste umbenennen und löschen
+    $(this.root, '.p-rename').addEventListener('click', () => this.startRename());
+    el.pTitle.addEventListener('dblclick', () => this.startRename());
+    el.pRenameForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = el.pRenameInput.value.trim();
+      if (!name) return el.pRenameInput.focus();
+      if (await actions.renamePlaylist(name)) this.stopRename();
+    });
+    $(this.root, '.p-rename-cancel').addEventListener('click', () => this.stopRename());
+    el.pRenameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
+        this.stopRename();
+      }
+    });
+    el.pDelete.addEventListener('click', () => {
+      // Zweistufig: erst nachfragen, beim zweiten Klick löschen
+      if (!el.pDelete.classList.contains('confirm')) {
+        el.pDelete.classList.add('confirm');
+        $(el.pDelete, 'span').textContent = 'Wirklich löschen?';
+        clearTimeout(this.deleteTimer);
+        this.deleteTimer = setTimeout(() => this.#resetDelete(), 4000);
+        return;
+      }
+      this.#resetDelete();
+      actions.deletePlaylist();
+    });
+
+    // Auswahlfenster „Zur Wiedergabeliste“
+    el.popList.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-pl]');
+      if (!b || !this.pick) return;
+      const { trackIds } = this.pick;
+      this.closePopover();
+      actions.addToPlaylist(b.dataset.pl, trackIds);
+    });
+    el.popNew.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = el.popName.value.trim();
+      if (!name) return el.popName.focus();
+      const { trackIds } = this.pick ?? { trackIds: [] };
+      this.closePopover();
+      await actions.createPlaylist(name, trackIds, { select: !trackIds.length && store.collection === 'playlists' });
+    });
+    el.pick.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
+        this.closePopover();
+      }
+    });
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.pick && !el.pick.contains(e.target) && !this.pick.anchor?.contains?.(e.target)) this.closePopover();
+      },
+      true
+    );
     el.genre.addEventListener('change', () => store.setGenre(el.genre.value));
     for (const b of el.layouts) b.addEventListener('click', () => actions.setLayout(b.dataset.layout));
     $(this.root, '.random').addEventListener('click', () => actions.randomAlbum());
@@ -315,7 +420,23 @@ export class UI {
     $(this.root, '.p-mbid-go').addEventListener('click', () => actions.lookupOnline(el.pMbid.value.trim()));
     el.pTracks.addEventListener('click', (e) => {
       const li = e.target.closest('li[data-i]');
-      if (li) actions.playTrack(Number(li.dataset.i));
+      if (!li || e.target.closest('.grip')) return;
+      const i = Number(li.dataset.i);
+      const btn = e.target.closest('.row-btn');
+      if (btn?.classList.contains('add')) {
+        const t = this.panelDetail?.tracks[i];
+        if (t) actions.pickPlaylist([t.id], { anchor: btn, label: `„${t.title}“` });
+        return;
+      }
+      if (btn?.classList.contains('rm')) return actions.removePlaylistTrack(i);
+      actions.playTrack(i);
+    });
+    // Titel der Wiedergabeliste am Griff ziehen und umsortieren
+    el.pTracks.addEventListener('pointerdown', (e) => {
+      const grip = e.target.closest('.grip');
+      if (!grip || this.panelAlbum?.kind !== 'playlist' || (e.button !== 0 && e.pointerType === 'mouse')) return;
+      e.preventDefault();
+      this.#dragTrack(grip.closest('li[data-i]'), e);
     });
 
     $(this.root, '.np-thumb').addEventListener('click', () => actions.gotoPlaying());
@@ -376,6 +497,10 @@ export class UI {
     });
 
     player.on('track', () => this.renderPlayer());
+    store.on('playlists', () => this.renderFilters());
+    store.on('plays', (albumId) => {
+      if (store.current?.id === albumId) this.renderCaption(store.current, { quiet: true });
+    });
     player.on('state', () => this.renderPlayerState());
     player.on('queue', () => this.renderPlayerState());
     player.on('volume', () => this.renderPlayerState());
@@ -384,8 +509,9 @@ export class UI {
       this.renderGenres();
     });
     store.on('filters', () => {
-      el.search.value = store.query;
-      el.genre.value = store.genre;
+      // Nur bei Änderung setzen, sonst springt beim Tippen der Cursor ans Ende
+      if (el.search.value !== store.query) el.search.value = store.query;
+      if (el.genre.value !== store.genre) el.genre.value = store.genre;
       this.renderFilters();
     });
     store.on('view', () => this.renderFilters());
@@ -436,12 +562,15 @@ export class UI {
     return { side: 'right', frac: Math.min(0.6, (r.width + 24) / window.innerWidth), top: top * 0.5 };
   }
 
-  /** Ansicht (Alle/Favoriten), Cover-Filter, Zähler und Hinweis bei leerer Ansicht. */
+  /** Ansicht (Alle/Favoriten/Zuletzt/Listen), Cover-Filter, Zähler und Hinweis bei leerer Ansicht. */
   renderFilters() {
     const { el, store } = this;
-    for (const b of el.views) b.classList.toggle('active', b.dataset.view === store.collection);
+    const c = store.collection;
+    for (const b of el.views) b.classList.toggle('active', b.dataset.view === c);
+    document.body.dataset.view = c;
     const favs = store.favoriteCount;
     el.favCount.textContent = favs ? String(favs) : '';
+    el.plCount.textContent = store.playlists.length ? String(store.playlists.length) : '';
     el.completeOnly.classList.toggle('active', !!store.settings.completeOnly);
     el.completeOnly.title = store.settings.completeOnly
       ? 'Filter aktiv: nur Alben mit Front- und Rückseite (klicken zum Aufheben)'
@@ -452,7 +581,30 @@ export class UI {
     el.filterEmpty.classList.toggle('hidden', !empty);
     if (!empty) return;
     const complete = store.completeAlbums.filter((a) => !a.favorite).length;
-    if (store.collection === 'favorites' && !favs) {
+    el.feIcon.innerHTML = { recent: ICONS.history, playlists: ICONS.playlist }[c] ?? ICONS.star;
+    el.feIcon.dataset.kind = c;
+    const filtered = !!(store.query || store.genre || (store.settings.completeOnly && c !== 'playlists'));
+    if (c === 'recent' && (!store.playedCount || !filtered)) {
+      const on = store.settings.history !== false;
+      el.feTitle.textContent = on ? 'Noch nichts gehört' : 'Hörverlauf ist aus';
+      el.feMsg.innerHTML = on
+        ? 'Sobald du in ein Album <b>30 Sekunden</b> hineingehört hast, steht es hier – das zuletzt gehörte vorne, sortiert nach Heute, Gestern und früher.'
+        : 'discbox merkt sich gerade nicht, was du hörst. Schalte den Hörverlauf ein, dann erscheinen deine Alben hier.';
+      el.feActions.innerHTML =
+        (on ? '' : `<button class="btn primary" data-act="enableHistory">${ICONS.history}<span>Hörverlauf einschalten</span></button>`) +
+        `<button class="btn ghost" data-act="showAll"><span>Alle Alben zeigen</span></button>`;
+      return;
+    }
+    if (c === 'playlists' && (!store.playlists.length || !store.query)) {
+      el.feTitle.textContent = 'Noch keine Wiedergabelisten';
+      el.feMsg.innerHTML =
+        'Öffne ein Album und tippe bei einem Titel auf <b>＋</b> – oder auf <b>Liste</b>, um das ganze Album aufzunehmen. Jede Liste steht danach als selbst gebrannte CD im Regal.';
+      el.feActions.innerHTML =
+        `<button class="btn primary" data-act="newPlaylist">${ICONS.plus}<span>Neue Wiedergabeliste</span></button>` +
+        `<button class="btn ghost" data-act="showAll"><span>Alle Alben zeigen</span></button>`;
+      return;
+    }
+    if (c === 'favorites' && !favs) {
       el.feTitle.textContent = 'Noch keine Favoriten';
       el.feMsg.innerHTML =
         'Markiere Alben mit <b>★ Favorit</b> oder der Taste <kbd>S</kbd>. Du kannst auch alle Alben übernehmen, bei denen Front- <i>und</i> Rückseite vorhanden sind.';
@@ -462,17 +614,20 @@ export class UI {
     } else {
       el.feTitle.textContent = 'Nichts gefunden';
       const reasons = [
-        store.collection === 'favorites' ? 'nur Favoriten' : null,
-        store.settings.completeOnly ? 'nur mit Front- und Rückseite' : null,
-        store.genre ? `Genre „${store.genre}“` : null,
+        { favorites: 'nur Favoriten', recent: 'nur zuletzt gehörte' }[c] ?? null,
+        store.settings.completeOnly && c !== 'playlists' ? 'nur mit Front- und Rückseite' : null,
+        store.genre && c !== 'playlists' ? `Genre „${store.genre}“` : null,
         store.query ? `Suche „${store.query}“` : null
       ].filter(Boolean);
-      el.feMsg.textContent = `Kein Album passt zu: ${reasons.join(', ')}.`;
+      el.feMsg.textContent = `${c === 'playlists' ? 'Keine Liste' : 'Kein Album'} passt zu: ${reasons.join(', ')}.`;
       el.feActions.innerHTML = `<button class="btn primary" data-act="resetFilters"><span>Filter zurücksetzen</span></button>`;
     }
   }
 
   renderFavorite(album) {
+    const pl = album?.kind === 'playlist';
+    this.el.capFav.classList.toggle('hidden', pl);
+    this.el.capAdd.classList.toggle('hidden', pl || !album);
     const on = !!album?.favorite;
     for (const b of [this.el.capFav, this.el.pFav]) {
       b.classList.toggle('is-fav', on);
@@ -482,22 +637,38 @@ export class UI {
   }
 
   // ---------- Browse-Ansicht ----------
-  renderCaption(album) {
-    const { el } = this;
+  renderCaption(album, { quiet = false } = {}) {
+    const { el, store } = this;
     if (!album) {
       el.caption.classList.add('empty-cap');
       return;
     }
     el.caption.classList.remove('empty-cap');
+    el.caption.classList.toggle('is-playlist', album.kind === 'playlist');
     el.capArtist.textContent = album.artist;
     el.capTitle.textContent = album.title;
-    const meta = [album.year, album.genres?.[0], `${album.trackCount} Titel`, fmtLong(album.duration), album.format].filter(Boolean);
-    el.capMeta.textContent = meta.join('  ·  ');
-    const g = this.store.groups?.[this.store.groupIndexOf(this.store.index)];
+    let meta;
+    if (album.kind === 'playlist') {
+      meta = [
+        album.trackCount ? `${album.trackCount} Titel` : 'noch leer',
+        fmtLong(album.duration),
+        album.albumCount > 1 ? `aus ${album.albumCount} Alben` : null,
+        album.missing ? `${album.missing} nicht mehr da` : null
+      ];
+    } else {
+      meta = [album.year, album.genres?.[0], `${album.trackCount} Titel`, fmtLong(album.duration), album.format];
+      if (store.collection === 'recent' && album.lastPlayed) {
+        meta = [`Gehört ${relativeTime(album.lastPlayed)}`, album.plays > 1 ? `${album.plays}× gespielt` : null, album.year, `${album.trackCount} Titel`];
+      }
+    }
+    el.capMeta.textContent = meta.filter(Boolean).join('  ·  ');
+    const g = store.groups?.[store.groupIndexOf(store.index)];
+    const suffix = { favorites: ' Favoriten', playlists: ' Listen' }[store.collection] ?? '';
     el.capCount.textContent = g
-      ? `${g.title}  ·  ${this.store.index - g.start + 1} / ${g.end - g.start + 1}`
-      : `${this.store.index + 1} / ${this.store.view.length}${this.store.collection === 'favorites' ? ' Favoriten' : ''}`;
+      ? `${g.title}  ·  ${store.index - g.start + 1} / ${g.end - g.start + 1}`
+      : `${store.index + 1} / ${store.view.length}${suffix}`;
     this.renderFavorite(album);
+    if (quiet) return;
     el.caption.classList.remove('swap');
     void el.caption.offsetWidth;
     el.caption.classList.add('swap');
@@ -507,7 +678,7 @@ export class UI {
   renderRail() {
     const letters = this.store.letters();
     this.el.rail.innerHTML = letters.map((l) => `<button data-i="${l.index}" title="${esc(l.letter)}">${esc(l.letter)}</button>`).join('');
-    this.el.rail.classList.toggle('groups', !!this.store.groups && this.store.settings.shelfGroup !== 'letter');
+    this.el.rail.classList.toggle('groups', this.store.railShowsGroups);
     this.el.rail.classList.toggle('hidden', letters.length < (this.store.groups ? 2 : 3));
     for (const b of this.el.rail.children) b.addEventListener('click', () => this.store.select(Number(b.dataset.i), { jump: true }));
     this.highlightRail();
@@ -545,8 +716,16 @@ export class UI {
 
   renderPanel(album, detail) {
     const { el } = this;
+    if (this.panelAlbum?.id !== album.id) {
+      this.stopRename();
+      this.#resetDelete();
+    }
     this.panelAlbum = album;
     this.panelDetail = detail ?? null;
+    const isPl = album.kind === 'playlist';
+    el.panel.classList.toggle('is-playlist', isPl);
+    el.pTracks.classList.toggle('pl', isPl);
+    if (isPl) return this.#renderPlaylistPanel(album, detail);
     el.pArtist.textContent = album.artist;
     el.pTitle.textContent = album.title;
     const chips = [
@@ -571,12 +750,13 @@ export class UI {
         disc = t.disc;
         rows.push(`<li class="disc-head">CD ${disc}</li>`);
       }
-      const badge = t.transcode ? `<span class="fmt" title="Wird für den Browser umgewandelt">${esc(t.codec)}</span>` : '';
+      const badge = t.transcode ? `<span class="fmt" title="Wird für den Browser umgewandelt">${esc(t.codec)}</span>` : '<span></span>';
       rows.push(
         `<li data-i="${i}" tabindex="-1"><span class="no">${String(t.no).padStart(2, '0')}</span>` +
           `<span class="eq"><i></i><i></i><i></i></span>` +
           `<span class="tt"><span class="t">${esc(t.title)}</span>${t.artist ? `<span class="a">${esc(t.artist)}</span>` : ''}</span>` +
-          `${badge}<span class="dur">${fmtTime(t.duration)}</span></li>`
+          `${badge}<span class="dur">${fmtTime(t.duration)}</span>` +
+          `<button class="row-btn add" title="Zu einer Wiedergabeliste hinzufügen (W)" aria-label="Zu einer Wiedergabeliste hinzufügen">${ICONS.plus}</button></li>`
       );
     });
     el.pTracks.innerHTML = rows.join('');
@@ -588,6 +768,238 @@ export class UI {
     this.renderCoverStatus(detail);
     this.markPlaying();
     this.#markFocus();
+  }
+
+  /** Detailansicht einer Wiedergabeliste: Titel mit Herkunft, Griff zum Umsortieren, Entfernen. */
+  #renderPlaylistPanel(pl, detail) {
+    const { el } = this;
+    el.pArtist.textContent = 'Wiedergabeliste';
+    el.pTitle.textContent = pl.title;
+    const chips = [
+      pl.trackCount ? `${pl.trackCount} Titel` : 'noch leer',
+      fmtLong(pl.duration),
+      pl.albumCount > 1 ? `aus ${pl.albumCount} Alben` : null,
+      pl.missing ? `${pl.missing} nicht mehr da` : null
+    ].filter(Boolean);
+    el.pChips.innerHTML = chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('');
+    if (!detail) {
+      el.pTracks.innerHTML = `<li class="loading">Titelliste wird geladen …</li>`;
+      el.pFoot.textContent = '';
+      return;
+    }
+    if (!detail.tracks.length) {
+      el.pTracks.innerHTML = `<li class="loading empty-list">Noch keine Titel. Öffne ein Album und tippe bei einem Titel auf <b>＋</b>.</li>`;
+    } else {
+      el.pTracks.innerHTML = detail.tracks
+        .map((t, i) => {
+          const gone = t.available === false;
+          const sub = gone ? 'nicht mehr in der Bibliothek' : [t.artist, t.albumTitle].filter(Boolean).join(' · ');
+          return (
+            `<li data-i="${i}" tabindex="-1" class="${gone ? 'gone' : ''}">` +
+            `<span class="grip" title="Ziehen zum Umsortieren (Alt + ↑/↓)">${ICONS.grip}</span>` +
+            `<span class="no">${String(i + 1).padStart(2, '0')}</span>` +
+            `<span class="eq"><i></i><i></i><i></i></span>` +
+            `<span class="tt"><span class="t">${esc(t.title)}</span><span class="a">${esc(sub)}</span></span>` +
+            `<span class="dur">${gone ? '' : fmtTime(t.duration)}</span>` +
+            `<button class="row-btn rm" title="Aus der Liste entfernen (Entf)" aria-label="Aus der Liste entfernen">${ICONS.close}</button></li>`
+          );
+        })
+        .join('');
+    }
+    const created = pl.created ? new Date(pl.created).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    el.pFoot.innerHTML =
+      `<div>Angelegt am ${esc(created)} · geändert ${esc(relativeTime(pl.updated))}</div>` +
+      (detail.tracks.length > 1
+        ? `<div>Umsortieren: am Griff ziehen oder <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>Entf</kbd> entfernt den gewählten Titel</div>`
+        : '');
+    this.markPlaying();
+    this.#markFocus();
+  }
+
+  // ---------- Wiedergabelisten: Umbenennen, Löschen, Umsortieren ----------
+  startRename() {
+    if (this.panelAlbum?.kind !== 'playlist') return;
+    const { el } = this;
+    el.pRenameInput.value = this.panelAlbum.title;
+    el.pTitle.classList.add('hidden');
+    el.pRenameForm.classList.remove('hidden');
+    el.pRenameInput.focus();
+    el.pRenameInput.select();
+  }
+
+  stopRename() {
+    const { el } = this;
+    if (el.pRenameForm.classList.contains('hidden')) return;
+    el.pRenameForm.classList.add('hidden');
+    el.pTitle.classList.remove('hidden');
+    if (document.activeElement === el.pRenameInput) el.pRenameInput.blur();
+  }
+
+  #resetDelete() {
+    clearTimeout(this.deleteTimer);
+    const b = this.el.pDelete;
+    if (!b.classList.contains('confirm')) return;
+    b.classList.remove('confirm');
+    $(b, 'span').textContent = 'Löschen';
+  }
+
+  /** Ziehen am Griff: Zeile folgt dem Zeiger, die anderen rücken zur Seite; Loslassen speichert. */
+  #dragTrack(li, e) {
+    const list = this.el.pTracks;
+    const rows = [...list.querySelectorAll('li[data-i]')];
+    const from = rows.indexOf(li);
+    if (from < 0 || rows.length < 2) return;
+    const scroller = $(this.el.panel, '.panel-inner');
+    // Lage der Zeilen relativ zur Liste (bleibt beim Scrollen gleich)
+    const listTop = list.getBoundingClientRect().top;
+    const tops = rows.map((r) => r.getBoundingClientRect().top - listTop);
+    const heights = rows.map((r) => r.offsetHeight);
+    const grab = e.clientY - li.getBoundingClientRect().top;
+    let to = from;
+    let lastY = e.clientY;
+    li.classList.add('dragging');
+    list.classList.add('sorting');
+    const place = () => {
+      const y = lastY - list.getBoundingClientRect().top - grab;
+      li.style.transform = `translateY(${y - tops[from]}px)`;
+      const center = y + heights[from] / 2;
+      to = from;
+      for (let j = 0; j < rows.length; j++) {
+        const mid = tops[j] + heights[j] / 2;
+        if (j < from && center < mid) to = Math.min(to, j);
+        if (j > from && center > mid) to = Math.max(to, j);
+      }
+      rows.forEach((r, j) => {
+        if (j === from) return;
+        let shift = 0;
+        if (from < to && j > from && j <= to) shift = -heights[from];
+        if (from > to && j >= to && j < from) shift = heights[from];
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+    // Am oberen/unteren Rand des Panels mitscrollen
+    let raf = 0;
+    const autoScroll = () => {
+      const r = scroller.getBoundingClientRect();
+      const edge = 56;
+      const v = lastY < r.top + edge ? -(r.top + edge - lastY) / 4 : lastY > r.bottom - edge ? (lastY - (r.bottom - edge)) / 4 : 0;
+      if (v) {
+        scroller.scrollTop += v;
+        place();
+      }
+      raf = requestAnimationFrame(autoScroll);
+    };
+    raf = requestAnimationFrame(autoScroll);
+    const move = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      lastY = ev.clientY;
+      place();
+    };
+    const end = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      for (const r of rows) r.style.transform = '';
+      li.classList.remove('dragging');
+      list.classList.remove('sorting');
+      if (ev.type === 'pointerup' && to !== from) {
+        this.focusTrack = to;
+        this.actions.movePlaylistTrack(from, to);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+
+  /** Gewählten Titel der Liste verschieben (Alt + ↑/↓). */
+  async moveFocusedTrack(delta) {
+    if (this.panelAlbum?.kind !== 'playlist' || this.focusTrack < 0) return;
+    const from = this.focusTrack;
+    const to = from + delta;
+    const n = this.panelDetail?.tracks.length ?? 0;
+    if (to < 0 || to >= n) return;
+    this.focusTrack = to;
+    if (!(await this.actions.movePlaylistTrack(from, to))) this.focusTrack = from;
+    this.#markFocus(true);
+  }
+
+  /** Gewählten Titel aus der Liste entfernen (Entf). */
+  removeFocusedTrack() {
+    if (this.panelAlbum?.kind !== 'playlist' || this.focusTrack < 0) return;
+    const i = this.focusTrack;
+    const n = this.panelDetail?.tracks.length ?? 0;
+    this.focusTrack = n > 1 ? Math.min(i, n - 2) : -1;
+    this.actions.removePlaylistTrack(i);
+  }
+
+  // ---------- Auswahlfenster „Zur Wiedergabeliste“ ----------
+  get pickOpen() {
+    return !!this.pick;
+  }
+
+  /** trackIds leer = nur eine neue (leere) Liste anlegen. */
+  openPlaylistPicker({ trackIds = [], anchor = null, label = '' } = {}) {
+    const { el, store } = this;
+    this.closePopover();
+    this.pick = { trackIds, anchor };
+    const createOnly = !trackIds.length;
+    el.popTitle.textContent = createOnly ? 'Neue Wiedergabeliste' : 'Zur Wiedergabeliste';
+    el.popLabel.textContent = label;
+    el.popLabel.classList.toggle('hidden', !label);
+    const lists = [...store.playlists].sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
+    el.popList.innerHTML = createOnly
+      ? ''
+      : lists.length
+        ? lists
+            .map(
+              (p) =>
+                `<li><button data-pl="${esc(p.playlistId)}">${ICONS.playlist}<span class="pl-name">${esc(p.title)}</span><small>${p.trackCount} Titel</small></button></li>`
+            )
+            .join('')
+        : '<li class="pop-empty">Noch keine Listen – leg die erste an:</li>';
+    el.popList.classList.toggle('hidden', createOnly);
+    el.popName.value = '';
+    el.popName.placeholder = createOnly || !lists.length ? 'Name der Liste, z. B. Roadtrip' : 'Neue Liste …';
+    el.pick.classList.remove('hidden');
+    this.#placePopover(anchor);
+    (createOnly || !lists.length ? el.popName : el.popList.querySelector('button'))?.focus();
+  }
+
+  closePopover() {
+    if (!this.pick) return false;
+    this.pick = null;
+    this.el.pick.classList.add('hidden');
+    if (this.el.pick.contains(document.activeElement)) document.activeElement.blur();
+    return true;
+  }
+
+  #placePopover(anchor) {
+    const pop = this.el.pick;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const r = anchor?.isConnected ? anchor.getBoundingClientRect() : { left: W / 2, right: W / 2, top: H / 2, bottom: H / 2 };
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    let x = r.right - pw;
+    if (x < 8) x = r.left;
+    x = Math.max(8, Math.min(W - pw - 8, x));
+    let y = r.bottom + 8;
+    if (y + ph > H - 8) y = r.top - ph - 8;
+    y = Math.max(8, Math.min(H - ph - 8, y));
+    pop.style.left = `${Math.round(x)}px`;
+    pop.style.top = `${Math.round(y)}px`;
+  }
+
+  /** Knopf, an dem das Auswahlfenster für einen Titel erscheint. */
+  trackAnchor(i) {
+    return this.el.pTracks.querySelector(`li[data-i="${i}"] .row-btn`) ?? this.albumAnchor();
+  }
+
+  albumAnchor() {
+    return this.panelOpen ? this.el.pAddList : this.el.capAdd;
   }
 
   renderCoverStatus(detail) {
@@ -677,7 +1089,12 @@ export class UI {
     document.body.classList.toggle('has-player', !!cur);
     if (!cur) return;
     el.npTitle.textContent = cur.track.title;
-    el.npSub.textContent = `${cur.track.artist ?? cur.album.artist} — ${cur.album.title}`;
+    el.npSrc.textContent = `${cur.track.artist ?? cur.album.artist} — ${cur.album.title}`;
+    // Läuft eine Wiedergabeliste? Dann steht sie als Link dahinter
+    const disc = player.disc;
+    const fromList = disc?.kind === 'playlist';
+    el.npCtx.classList.toggle('hidden', !fromList);
+    if (fromList) el.npCtx.innerHTML = `${ICONS.playlist}<span>${esc(disc.title)}</span>`;
     const url = artUrl(cur.album, 'front', 'sm');
     el.npThumb.src = url ?? '';
     el.npThumb.style.visibility = url ? 'visible' : 'hidden';
@@ -789,7 +1206,7 @@ export class UI {
       </section>
       <section><h3>Ansicht</h3>
         <label class="row"><span>Beim Start zeigen</span><select data-key="startView">
-          ${opt('favorites', 'Favoriten', s.startView)}${opt('all', 'Alle Alben', s.startView)}
+          ${VIEW_ORDER.map((v) => opt(v, VIEWS[v].label, s.startView)).join('')}
         </select></label>
         ${check('completeOnly', 'Nur Alben mit Front- und Rückseite', 'Alben ohne vollständige Cover werden ausgeblendet')}
         <div class="row buttons">
@@ -809,6 +1226,13 @@ export class UI {
         <label class="row"><span>Auf dem Teller</span><select data-key="deckDisc">
           ${opt('cd', 'die CD des Albums', s.deckDisc)}${opt('vinyl', 'eine Schallplatte mit dem Cover als Label', s.deckDisc)}
         </select></label>
+      </section>
+      <section><h3>Hörverlauf</h3>
+        ${check('history', 'Hörverlauf aufzeichnen', 'Für „Zuletzt gehört“: Ein Titel zählt, sobald er 30 Sekunden lief (kurze Titel: die Hälfte)')}
+        <p class="info">${this.store.playedCount.toLocaleString('de-DE')} Alben gehört · ${this.store.historyEvents.toLocaleString('de-DE')} Wiedergaben gespeichert · ${this.store.playlists.length} Wiedergabelisten</p>
+        <div class="row buttons">
+          <button class="btn small ghost s-clearhistory">${ICONS.trash}<span>Verlauf löschen</span></button>
+        </div>
       </section>
       <section><h3>Bibliothek</h3>
         <p class="info">${st ? `${st.albums.toLocaleString('de-DE')} Alben · ${st.tracks.toLocaleString('de-DE')} Titel · Frontcover: ${st.covers.front} · Rückseiten: ${st.covers.back}` : ''}</p>
@@ -834,6 +1258,18 @@ export class UI {
       this.renderSettings();
     });
     $(this.el.settingsBody, '.s-fullscan').addEventListener('click', () => this.actions.rescan(true));
+    const clear = $(this.el.settingsBody, '.s-clearhistory');
+    clear.disabled = !this.store.historyEvents && !this.store.playedCount;
+    clear.addEventListener('click', async () => {
+      // Zweistufig wie beim Löschen einer Liste
+      if (!clear.classList.contains('confirm')) {
+        clear.classList.add('confirm');
+        $(clear, 'span').textContent = 'Wirklich den ganzen Verlauf löschen?';
+        return;
+      }
+      await this.actions.clearHistory();
+      this.renderSettings();
+    });
   }
 
   #renderHelp() {
@@ -849,7 +1285,9 @@ export class UI {
           ${row(['P'], 'Album abspielen')}
           ${row(['R'], 'Zufälliges Album')}
           ${row(['S'], 'Favorit an/aus')}
-          ${row(['V'], 'Alle Alben / Favoriten')}
+          ${row(['V'], 'Ansicht wechseln: Alle · Favoriten · Zuletzt gehört · Listen')}
+          ${row(['1', '2', '3', '4'], 'Ansicht direkt wählen')}
+          ${row(['W'], 'Album (oder gewählten Titel) zu einer Wiedergabeliste')}
           ${row(['/'], 'Suchen')}
           ${row(['L'], 'Anordnung wechseln')}
           ${row(['T'], 'Theme wechseln')}
@@ -861,6 +1299,8 @@ export class UI {
           ${row(['F'], 'Hülle umdrehen')}
           ${row(['O'], 'Hülle öffnen / schließen')}
           ${row(['B'], 'Booklet & Scans')}
+          ${row(['Alt ↑', 'Alt ↓'], 'Liste: gewählten Titel verschieben')}
+          ${row(['Entf'], 'Liste: gewählten Titel entfernen')}
           ${row(['Esc'], 'Zurück')}
         </table></section>
         <section><h3>Wiedergabe</h3><table>

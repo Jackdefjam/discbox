@@ -18,6 +18,8 @@
 - **Cover-Scraping in dieser Reihenfolge:** Bilder im Albumordner → in den Tags eingebettete Bilder → MusicBrainz / Cover Art Archive (Front, Back **und** CD-Aufdruck). Wo nichts zu finden ist, erzeugt discbox selbst ein schlichtes Cover, eine Rückseite mit Titelliste und einen CD-Rücken.
 - **Plattenspieler beim Abspielen:** Der Teller dreht sich mit der CD oder einer Schallplatte, der Tonarm folgt dem Album. Per Klick groß, mit der geöffneten Hülle daneben.
 - **Favoriten** mit eigener Ansicht (Start-Ansicht), goldenem Aufkleber auf der Hülle und dem Filter **„Nur komplette Cover“**: zeigt nur Alben, bei denen Front- *und* Rückseite vorhanden sind. Alle diese Alben lassen sich mit einem Klick zu Favoriten machen.
+- **Wiedergabelisten als selbst gebrannte CDs:** Titel oder ganze Alben per ＋ sammeln und per Ziehen sortieren. Jede Liste steht als eigene Hülle im Regal – mit Cover-Collage, beschriftetem Kreppband, handgeschriebener Titelliste und einem CD-Rohling mit Edding-Schrift.
+- **Zuletzt gehört:** eigene Ansicht mit allem, was du gehört hast, das Neueste vorne – eingeteilt in Heute, Gestern, Letzte 7 Tage, Letzte 30 Tage und Früher.
 - **Booklet-Ansicht** für alle Scans im Albumordner (auch im Unterordner `Scans/`, `Artwork/` …).
 - **Abspielen im Browser:** Warteschlange, Zufall, Wiederholen, Spulen, Medientasten. Der nächste Titel wird vorgeladen. MP3, FLAC, AAC, Opus, Vorbis und WAV laufen direkt; **WMA, ALAC, APE, WavPack, DSD & Co. wandelt der Server mit ffmpeg um** (Spulen funktioniert auch dann).
 - **Bedienung per Maus, Touch, Tastatur, TV-Fernbedienung und Gamepad** (Xbox/PlayStation-Controller, wie in LaunchBox Big Box).
@@ -87,11 +89,38 @@ docker compose -f docker-compose.build.yml up -d --build
 ## Favoriten und komplette Cover
 
 - **Favorit setzen:** ★ unter dem Albumtitel, im Album-Panel, Taste **S** oder rechter Stick-Klick am Controller.
-- **Ansicht wechseln:** oben „Alle“ / „★ Favoriten“ oder Taste **V**. Beim Start zeigt discbox die Favoriten. In den Einstellungen unter *Ansicht → Beim Start zeigen* lässt sich das ändern.
+- **Ansicht wechseln:** oben „Alle“, „★ Favoriten“, „Zuletzt gehört“ (Uhr) und „Wiedergabelisten“ – oder Taste **V** (der Reihe nach) bzw. **1** bis **4**. Beim Start zeigt discbox die Favoriten. In den Einstellungen unter *Ansicht → Beim Start zeigen* lässt sich jede der vier Ansichten wählen.
 - **Nur komplette Cover:** Das Symbol mit den zwei Karten neben der Ansicht blendet alle Alben aus, denen das Frontcover oder die Rückseite fehlt. Der Filter funktioniert in beiden Ansichten und bleibt gespeichert.
 - **Alle kompletten Alben übernehmen:** In der leeren Favoriten-Ansicht oder in den Einstellungen gibt es einen Knopf, der alle Alben mit Front- und Rückseite auf einmal zu Favoriten macht.
 
 Favoriten werden auf dem Server gespeichert (`overrides.json` im Daten-Ordner). Sie gelten auf allen Geräten und überstehen jeden Scan.
+
+## Wiedergabelisten
+
+Jede Wiedergabeliste ist eine selbst gebrannte CD: vorne eine Collage aus bis zu vier Covern der enthaltenen Alben mit dem Namen auf Kreppband, auf dem Rücken ein beschrifteter Papierstreifen, hinten die Titelliste in Handschrift auf Linienpapier. Klappt man die Hülle auf, liegt ein CD-Rohling mit Edding-Beschriftung im klaren Tray, im Booklet steht, aus welchen Alben die Titel stammen.
+
+![Wiedergabelisten als selbst gebrannte CDs](docs/listen.jpg)
+
+| Geöffnet: CD-Rohling und Titel der Liste | Rückseite mit handgeschriebener Titelliste |
+| --- | --- |
+| ![Geöffnete Liste](docs/liste-offen.jpg) | ![Rückseite einer Liste](docs/liste-rueckseite.jpg) |
+
+- **Titel sammeln:** Im Album-Panel steht bei jedem Titel ein **＋**. Der Knopf **Liste** (unter dem Albumtitel und im Panel) nimmt das ganze Album auf, das Listen-Symbol in der Player-Leiste den gerade laufenden Titel. Taste **W** macht dasselbe: im Panel für den gewählten Titel, sonst für das ganze Album. Es öffnet sich eine Auswahl deiner Listen – oder du legst darin direkt eine neue an. Titel, die schon drin sind, werden nicht doppelt aufgenommen.
+- **Ansehen und abspielen:** Ansicht **Wiedergabelisten** (Taste **4**). Listen verhalten sich wie Alben: herausnehmen, drehen, öffnen, abspielen, Zufall. In der Player-Leiste steht über dem Titel, aus welcher Liste er gerade kommt – ein Klick darauf führt zur Liste. Der Plattenspieler legt die gebrannte CD auf und zeigt die Collage als Platten-Label.
+- **Bearbeiten** im Panel der Liste: Titel am Griff **⠿** ziehen oder mit **Alt + ↑/↓** verschieben, mit **×** bzw. **Entf** entfernen. **Umbenennen** per Knopf oder Doppelklick auf den Namen, **Löschen** mit zweimal Klicken.
+- **Verschwundene Titel:** Wird eine Datei verschoben oder gelöscht, bleibt der Titel durchgestrichen in der Liste stehen und wird beim Abspielen übersprungen. Taucht sie unter demselben Pfad wieder auf, spielt er wieder.
+
+| Titel zu einer Liste hinzufügen | Die gebrannte CD auf dem Plattenspieler |
+| --- | --- |
+| ![Titel zu einer Liste hinzufügen](docs/liste-hinzufuegen.jpg) | ![Wiedergabeliste auf dem Plattenspieler](docs/plattenspieler-liste.jpg) |
+
+## Zuletzt gehört
+
+Die Ansicht **Zuletzt gehört** (Uhr-Symbol oder Taste **3**) zeigt alle Alben, in die du hineingehört hast – das zuletzt gehörte vorne. Ein Album zählt als gehört, sobald ein Titel **30 Sekunden** lief (bei kurzen Titeln die Hälfte); Spulen zählt nicht mit. Die Abschnitte **Heute, Gestern, Letzte 7 Tage, Letzte 30 Tage** und **Früher** erscheinen in der Schnellsprung-Leiste und in der Regalwand als eigene Böden. Unter dem Titel steht, wann du das Album zuletzt gehört hast und wie oft.
+
+![Zuletzt gehört in der Regalwand](docs/zuletzt-gehoert.jpg)
+
+Unter *Einstellungen → Hörverlauf* lässt sich die Aufzeichnung abschalten und der Verlauf löschen. Listen und Verlauf liegen auf dem Server in `collections.json` im Daten-Ordner – sie gelten also auf allen Geräten und überstehen jeden Scan. Für ein Backup reicht es, diese Datei zu sichern.
 
 ## Plattenspieler
 
@@ -170,7 +199,7 @@ discbox braucht keine bestimmte Ordnerstruktur. Mit Tags (ID3, Vorbis-Kommentare
 | | Sammlung | Album (Detailansicht) |
 | --- | --- | --- |
 | **Maus/Touch** | ziehen oder Mausrad zum Blättern, Klick auf die mittlere Hülle zum Herausnehmen | ziehen zum Drehen, Klick öffnet/schließt die Hülle, Doppelklick dreht sie um |
-| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, D Plattenspieler, S Favorit, V Alle/Favoriten, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, F umdrehen, O öffnen, B Booklet, Esc zurück |
+| **Tastatur** | ← → blättern, ↑ ↓ Regalboden wechseln, Enter ansehen, P abspielen, D Plattenspieler, S Favorit, V Ansicht wechseln, 1–4 Ansicht direkt, W zur Wiedergabeliste, R Zufall, / suchen, L Anordnung, T Theme | ↑ ↓ Titel wählen, Enter abspielen, W Titel zur Liste, F umdrehen, O öffnen, B Booklet, Esc zurück; in Listen Alt + ↑ ↓ verschieben, Entf entfernen |
 | **Gamepad** | Steuerkreuz/Stick blättern (im Regal hoch/runter: Boden wechseln), A ansehen, X abspielen, Y Zufall, LB/RB Buchstaben springen, linken Stick drücken: Plattenspieler | A Titel spielen, Y umdrehen, Select öffnen, B zurück, rechter Stick dreht die Hülle |
 
 Leertaste spielt oder pausiert, `[` und `]` wechseln den Titel, `?` zeigt alle Kürzel. Mit einer TV-Fernbedienung (Pfeiltasten, OK, Zurück) lässt sich discbox ebenfalls bedienen.
@@ -219,14 +248,16 @@ npm install
 npm run testlib   # erzeugt testlib/music mit 24 fiktiven Alben (alle Sonderfälle)
 cp .env.example .env
 npm run dev       # Server auf :8080, Oberfläche mit Hot-Reload auf http://localhost:5173
-npm test          # Tests (Gruppierung, Cover-Erkennung, Online-Suche, API, Streaming)
+npm test          # Tests (Gruppierung, Cover-Erkennung, Online-Suche, API, Streaming, Listen, Verlauf)
 npm run build     # Oberfläche für die Produktion bauen
 ```
 
 ```
-server/        Node.js + Express: Scanner, Album-Gruppierung, Cover, MusicBrainz, Streaming
+server/        Node.js + Express: Scanner, Album-Gruppierung, Cover, MusicBrainz, Streaming,
+               Wiedergabelisten und Hörverlauf (collections.js)
 client/src/
-  scene/       three.js: Jewel-Case-Modell, Layouts, Spiegelboden, Texturen, Artwork-Generator
+  scene/       three.js: Jewel-Case-Modell, Layouts, Spiegelboden, Texturen, Artwork-Generator,
+               gebrannte CDs der Wiedergabelisten (mixtape.js), Plattenspieler
   ui/          Oberfläche, Tastatur/Maus/Gamepad
   core/        API, Zustand, Player, Themes
 test/          node:test

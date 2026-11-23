@@ -7,6 +7,16 @@ import { drawBack, drawDisc, drawFrontPlaceholder, drawInlay, drawSpine } from '
 import { albumHashColor } from './color.js';
 import { CASE, CASE_D, CASE_H, CASE_W, JewelCase } from './jewelcase.js';
 import { LAYOUTS } from './layouts.js';
+import {
+  drawMixtapeBack,
+  drawMixtapeDisc,
+  drawMixtapeFront,
+  drawMixtapeInlay,
+  drawMixtapeSpine,
+  loadMixTiles,
+  mixtapeColor,
+  pendingTiles
+} from './mixtape.js';
 import { BOARD_W, MARGIN, ROW_H, ShelfWall } from './shelfwall.js';
 
 const SHELF_GAP = 0.008;
@@ -116,6 +126,7 @@ export class Slot {
     this.color = albumHashColor(album);
     this.colorFromCover = false;
     this.frontSize = null;
+    this.frontEntry = null;
     this.backState = null;
     this.spineFromScan = false;
     this.interiorKey = null;
@@ -123,14 +134,43 @@ export class Slot {
     this.body.visible = true;
     this.shadow.visible = true;
     const k = this.case;
-    k.setTray(this.c.settings.tray);
+    // Wiedergabelisten: selbst gebrannte CD in einer Hülle mit klarem Tray
+    this.mix = album.kind === 'playlist';
+    if (this.mix) this.color = mixtapeColor(album, (id) => this.c.albumById?.(id));
+    k.setTray(this.mix ? 'clear' : this.c.settings.tray);
     k.setEdgesVisible(this.c.edgesVisible);
-    JewelCase.apply(k.frontMat, null, this.color);
-    JewelCase.apply(k.backMat, null, '#1b1b20');
+    JewelCase.apply(k.frontMat, null, this.mix ? '#f2ede2' : this.color);
+    JewelCase.apply(k.backMat, null, this.mix ? '#fbf9f1' : '#1b1b20');
     JewelCase.apply(k.inlayMat, null, '#ece7dc');
     JewelCase.apply(k.discMat, null, '#c9ced6');
     this.#applySpines();
-    if (!album.art?.front) this.#placeholderFront();
+    if (!album.art?.front && !this.mix) this.#placeholderFront();
+  }
+
+  /** Collage der Wiedergabeliste: sofort mit Farbflächen, dann mit den geladenen Covern. */
+  #wantMixFront(priority) {
+    if (this.frontSize) return;
+    const a = this.album;
+    const byId = (id) => this.c.albumById?.(id);
+    const asp = this.case.frontAspect;
+    const show = (key, tiles) => {
+      const entry = this.c.textures.generated(key, () => drawMixtapeFront(a, tiles));
+      this.#set('front', this.case.frontMat, entry, asp === 1 ? entry.texture : cropTexture(entry, asp));
+      this.frontEntry = entry;
+    };
+    this.frontSize = 'mix-pending';
+    if (a.albums?.length) show(`mixfront:${a.id}:${a.updated}:pending`, pendingTiles(byId, a));
+    const token = this.token;
+    loadMixTiles(this.c.textures, byId, a, priority).then((tiles) => {
+      if (token !== this.token) return;
+      show(`mixfront:${a.id}:${a.updated}:${tiles.map((t) => (t.image ? 'c' : 'p')).join('')}`, tiles);
+      this.frontSize = 'mix';
+      const color = tiles.length ? this.c.textures.colorOf(this.frontEntry) : null;
+      if (color) {
+        this.color = color;
+        this.c.onSlotColor(this);
+      }
+    });
   }
 
   #placeholderFront() {
@@ -160,6 +200,12 @@ export class Slot {
     const a = this.album;
     const dir = this.c.settings.spineDirection;
     const w = this.case.spec.spineW;
+    if (this.mix) {
+      const entry = this.c.textures.generated(`mixspine:${a.id}:${a.updated}:${dir}:${w}`, () => drawMixtapeSpine(a, dir, w));
+      this.#set('spineH', this.case.spineHingeMat, entry, entry.texture);
+      this.#set('spineO', this.case.spineOtherMat, entry, entry.texture);
+      return;
+    }
     const entry = this.c.textures.generated(`spine:${a.id}:${this.color}:${dir}:${w}`, () => drawSpine(a, this.color, dir, w));
     this.#set('spineH', this.case.spineHingeMat, entry, entry.texture);
     this.#set('spineO', this.case.spineOtherMat, entry, entry.texture);
@@ -168,6 +214,7 @@ export class Slot {
   /** Frontcover in gewünschter Größe sicherstellen (sm → md → lg). */
   wantFront(size, priority) {
     const a = this.album;
+    if (this.mix && a) return this.#wantMixFront(priority);
     if (!a?.art?.front || this.frontSize === size || this.frontPending === size) return;
     const order = { sm: 0, md: 1, lg: 2 };
     if (this.frontSize && order[this.frontSize] > order[size]) return; // nie verschlechtern
@@ -236,9 +283,11 @@ export class Slot {
     }
     const detail = this.detail ?? this.c.cachedDetail(a.id);
     const asp = this.case.backAspect;
-    const key = `back:${a.id}:${this.color}:${detail ? 1 : 0}:${asp.toFixed(3)}`;
+    const key = this.mix
+      ? `back:mix:${a.id}:${a.updated}:${detail ? 1 : 0}:${asp.toFixed(3)}`
+      : `back:${a.id}:${this.color}:${detail ? 1 : 0}:${asp.toFixed(3)}`;
     if (this.backState === key) return;
-    const entry = this.c.textures.generated(key, () => drawBack(a, detail, this.color, asp));
+    const entry = this.c.textures.generated(key, () => (this.mix ? drawMixtapeBack(a, detail, asp) : drawBack(a, detail, this.color, asp)));
     this.#set('back', this.case.backMat, entry, entry.texture);
     this.backState = key;
   }
@@ -252,6 +301,13 @@ export class Slot {
     const key = `${this.color}:${detail ? 1 : 0}:${frontReady ? 1 : 0}`;
     if (this.interiorKey === key) return;
     this.interiorKey = key;
+    if (this.mix) {
+      const inlay = this.c.textures.generated(`mixinlay:${a.id}:${a.updated}:${detail ? 1 : 0}`, () => drawMixtapeInlay(a, detail));
+      this.#set('inlay', this.case.inlayMat, inlay, inlay.texture);
+      const disc = this.c.textures.generated(`mixdisc:${a.id}:${a.updated}`, () => drawMixtapeDisc(a));
+      this.#set('disc', this.case.discMat, disc, disc.texture);
+      return;
+    }
     const inlay = this.c.textures.generated(`inlay:${a.id}:${this.color}:${detail ? 1 : 0}`, () => drawInlay(a, detail, this.color));
     this.#set('inlay', this.case.inlayMat, inlay, inlay.texture);
     if (a.art?.disc) {
@@ -276,6 +332,18 @@ export class Slot {
     this.detail = detail;
     if (this.backState?.startsWith?.('back:')) this.backState = null;
     this.interiorKey = null;
+  }
+
+  /** Geänderte Wiedergabeliste: Bilder neu erzeugen, Lage, Deckel und Drehung bleiben. */
+  refresh(album) {
+    this.album = album;
+    this.token++;
+    this.frontPending = null;
+    this.frontSize = null;
+    this.backState = null;
+    this.interiorKey = null;
+    this.detail = null;
+    this.#applySpines();
   }
 }
 
@@ -316,6 +384,10 @@ export class Carousel {
 
   cachedDetail(id) {
     return this.store.cachedDetail(id);
+  }
+
+  albumById(id) {
+    return this.store.albumById(id);
   }
 
   onSlotColor(slot) {
@@ -487,11 +559,15 @@ export class Carousel {
   rebuild() {
     const view = this.store.view;
     this.#computeShelf();
-    const sig = (a) => `${a.id}|${a.art?.front}|${a.art?.back}|${a.art?.disc}|${a.trackCount}`;
+    const sig = (a) => `${a.id}|${a.art?.front}|${a.art?.back}|${a.art?.disc}|${a.trackCount}|${a.updated ?? ''}`;
     for (const [i, s] of this.bound) {
       const a = view[i];
       if (a && s.album && sig(a) === sig(s.album)) {
         s.album = a;
+        continue;
+      }
+      if (a?.kind === 'playlist' && s.album?.id === a.id) {
+        s.refresh(a);
         continue;
       }
       s.unbind();
@@ -697,7 +773,8 @@ export class Carousel {
     cam.getWorldDirection(fwd);
     right.setFromMatrixColumn(cam.matrixWorld, 0);
     up.setFromMatrixColumn(cam.matrixWorld, 1);
-    const playingAlbum = this.player?.playing ? this.player.current?.album?.id : null;
+    // Läuft ein Album (oder eine Wiedergabeliste), dreht sich die CD in der geöffneten Hülle
+    const playingAlbum = this.player?.playing ? this.player.disc?.id : null;
 
     const info = this.poseInfo;
     const posCenter = this.#interp(this.centers, this.pos);

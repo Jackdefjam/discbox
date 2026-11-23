@@ -14,8 +14,10 @@ async function request(url, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-const post = (url, body) =>
-  request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+const send = (method, url, body) =>
+  request(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+const post = (url, body) => send('POST', url, body);
+const pl = (id) => `/api/playlists/${encodeURIComponent(id)}`;
 
 export const api = {
   status: () => request('/api/status'),
@@ -30,7 +32,21 @@ export const api = {
       body: JSON.stringify({ favorite })
     }),
   setFavorites: (ids, favorite) => post('/api/favorites', { ids, favorite }),
-  lookupOnline: (id, mbid) => post(`/api/albums/${encodeURIComponent(id)}/online`, mbid ? { mbid } : {})
+  lookupOnline: (id, mbid) => post(`/api/albums/${encodeURIComponent(id)}/online`, mbid ? { mbid } : {}),
+
+  // Wiedergabelisten
+  playlists: () => request('/api/playlists'),
+  playlist: (id) => request(pl(id)),
+  createPlaylist: (name, trackIds = []) => post('/api/playlists', { name, trackIds }),
+  renamePlaylist: (id, name) => send('PATCH', pl(id), { name }),
+  addToPlaylist: (id, trackIds) => post(`${pl(id)}/tracks`, { trackIds }),
+  setPlaylistTracks: (id, trackIds) => send('PUT', `${pl(id)}/tracks`, { trackIds }),
+  deletePlaylist: (id) => request(pl(id), { method: 'DELETE' }),
+
+  // Hörverlauf
+  history: (limit = 0) => request(`/api/history?limit=${limit}`),
+  recordPlay: (trackId) => post('/api/history', { trackId }),
+  clearHistory: () => request('/api/history', { method: 'DELETE' })
 };
 
 /** Bild-URL; v sorgt für dauerhaftes Caching im Browser. */

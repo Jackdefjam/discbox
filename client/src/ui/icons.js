@@ -4,6 +4,14 @@ const svg = (body, extra = '') =>
 const stroke = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 
 export const ICONS = {
+  history: svg(`<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5" ${stroke}/><path d="M3.5 4v4.5H8M12 7.5V12l3 2" ${stroke}/>`),
+  playlist: svg(`<path d="M4 6h11M4 11h11M4 16h6" ${stroke}/><path d="M18 18.5V8.5l3-1" ${stroke}/><circle cx="16.2" cy="18.5" r="1.9" ${stroke}/>`),
+  plus: svg(`<path d="M12 5v14M5 12h14" ${stroke}/>`),
+  listAdd: svg(`<path d="M4 6h11M4 11h11M4 16h7" ${stroke}/><path d="M18 13.5v7M14.5 17h7" ${stroke}/>`),
+  trash: svg(`<path d="M4.5 7h15M9.5 7V5h5v2M6.5 7l1 12.5h9l1-12.5M10 10.5v6M14 10.5v6" ${stroke}/>`),
+  edit: svg(`<path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z" ${stroke}/><path d="M13.5 6.5l4 4" ${stroke}/>`),
+  grip: svg('<g fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></g>'),
+  minus: svg(`<path d="M6 12h12" ${stroke}/>`),
   disc: svg(`<circle cx="12" cy="12" r="9.5" ${stroke}/><circle cx="12" cy="12" r="2.5" ${stroke}/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5" ${stroke} opacity=".6"/>`),
   play: svg('<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill="currentColor"/>'),
   pause: svg('<rect x="6" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/>'),
